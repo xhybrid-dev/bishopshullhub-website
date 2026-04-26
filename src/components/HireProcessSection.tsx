@@ -7,43 +7,49 @@ import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
 const PHASES = [
   {
     label: 'Your Enquiry',
+    color: 'hsl(171,44%,38%)',
     steps: [
-      { n: 1,  title: 'Check availability',               desc: 'Use the live calendar to confirm your preferred date and time is free.' },
-      { n: 2,  title: 'Complete the enquiry form',        desc: 'Fill in your contact details, event type, and date using the form below.' },
+      { n: 1,  title: 'Check availability',                    desc: 'Use the live calendar to confirm your preferred date and time is free.' },
+      { n: 2,  title: 'Complete the enquiry form',             desc: 'Fill in your contact details, event type, and date using the form below.' },
     ],
   },
   {
     label: 'Confirming Your Booking',
+    color: 'hsl(197,55%,42%)',
     steps: [
-      { n: 3,  title: 'Booking manager reviews your request', desc: 'Our volunteer bookings secretary will process your enquiry, usually within 3 working days.' },
-      { n: 4,  title: 'Viewing arranged',                 desc: 'The team will be in touch to arrange a convenient time for you to visit the Hub.' },
-      { n: 5,  title: 'Visit the Hub for a viewing',      desc: 'Come and see the space in person before committing to a booking.' },
-      { n: 6,  title: 'Confirm whether to proceed',       desc: 'Let us know if you would like to go ahead with the booking.' },
-      { n: 7,  title: 'Agree conditions of hire',         desc: 'Review and confirm your agreement with the standard conditions of hire.' },
-      { n: 8,  title: 'Pay your hire charge',             desc: 'Pay the hire fee to secure your booking on the calendar.' },
+      { n: 3,  title: 'Booking manager reviews your request',  desc: 'Our volunteer bookings secretary will process your enquiry, usually within 3 working days.' },
+      { n: 4,  title: 'Viewing arranged',                      desc: 'The team will be in touch to arrange a convenient time for you to visit the Hub.' },
+      { n: 5,  title: 'Visit the Hub for a viewing',           desc: 'Come and see the space in person before committing to a booking.' },
+      { n: 6,  title: 'Confirm whether to proceed',            desc: 'Let us know if you would like to go ahead with the booking.' },
+      { n: 7,  title: 'Agree conditions of hire',              desc: 'Review and confirm your agreement with the standard conditions of hire.' },
+      { n: 8,  title: 'Pay your hire charge',                  desc: 'Pay the hire fee to secure your booking on the calendar.' },
     ],
   },
   {
     label: 'Your Hire Day & After',
+    color: 'hsl(133,55%,38%)',
     steps: [
-      { n: 9,  title: 'Pay the refundable deposit',       desc: 'Two weeks before your hire date, pay the deposit (£50 daytime / £100 evening).' },
-      { n: 10, title: 'Our team welcomes you',            desc: 'A member of the team will be there at your hire time to let you in and lock up afterwards.' },
-      { n: 11, title: 'Deposit returned',                 desc: 'Your deposit will be returned within 3 days of your hire, subject to the condition of the Hub.' },
+      { n: 9,  title: 'Pay the refundable deposit',            desc: 'Two weeks before your hire date, pay the deposit (£50 daytime / £100 evening).' },
+      { n: 10, title: 'Our team welcomes you',                 desc: 'A member of the team will be there at your hire time to let you in and lock up afterwards.' },
+      { n: 11, title: 'Deposit returned',                      desc: 'Your deposit will be returned within 3 days of your hire, subject to the condition of the Hub.' },
     ],
   },
 ];
 
-const ALL_STEPS = PHASES.flatMap(p => p.steps.map(s => ({ ...s, phase: p.label })));
-const SCROLL_PER_STEP = 160; // px of scroll distance allocated to each step
+const ALL_STEPS = PHASES.flatMap(p => p.steps.map(s => ({ ...s, phase: p.label, color: p.color })));
+const SCROLL_PER_STEP = 160;
 
 export default function HireProcessSection() {
+  /* ── Desktop sticky-scroll state ── */
   const outerRef        = useRef<HTMLDivElement>(null);
   const containerTopRef = useRef(0);
   const [activeIndex, setActiveIndex] = useState(0);
   const [direction,   setDirection]   = useState<'down' | 'up'>('down');
   const [animKey,     setAnimKey]     = useState(0);
 
-  /* Cache absolute top of the outer container (recalc on resize) */
+  /* ── Mobile carousel ref ── */
+  const carouselRef = useRef<HTMLDivElement>(null);
+
   const cacheTop = useCallback(() => {
     if (outerRef.current) {
       containerTopRef.current =
@@ -57,12 +63,12 @@ export default function HireProcessSection() {
     return () => window.removeEventListener('resize', cacheTop);
   }, [cacheTop]);
 
-  /* Scroll-driven step progression (desktop) */
+  /* Desktop scroll-driven step progression */
   useEffect(() => {
     const onScroll = () => {
       const scrollInto = window.scrollY - containerTopRef.current;
       const next = Math.max(0, Math.min(ALL_STEPS.length - 1,
-        Math.floor(scrollInto / SCROLL_PER_STEP)
+        Math.floor(scrollInto / SCROLL_PER_STEP),
       ));
       setActiveIndex(prev => {
         if (prev !== next) {
@@ -77,19 +83,26 @@ export default function HireProcessSection() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  /* Mobile carousel navigation */
-  const goTo = useCallback((next: number) => {
-    setDirection(next > activeIndex ? 'down' : 'up');
-    setAnimKey(k => k + 1);
-    setActiveIndex(next);
-  }, [activeIndex]);
+  /* Mobile: update active index from carousel scroll position */
+  const onCarouselScroll = useCallback(() => {
+    const el = carouselRef.current;
+    if (!el) return;
+    const cardSlotWidth = el.scrollWidth / ALL_STEPS.length;
+    const idx = Math.round(el.scrollLeft / cardSlotWidth);
+    setActiveIndex(Math.max(0, Math.min(ALL_STEPS.length - 1, idx)));
+  }, []);
+
+  /* Mobile prev/next buttons — programmatic scroll-snap */
+  const scrollToCard = useCallback((i: number) => {
+    const el = carouselRef.current;
+    if (!el) return;
+    const cardSlotWidth = el.scrollWidth / ALL_STEPS.length;
+    el.scrollTo({ left: i * cardSlotWidth, behavior: 'smooth' });
+  }, []);
 
   const scrollToForm = () => {
     const el = document.getElementById('booking-form');
-    if (el) {
-      const y = el.getBoundingClientRect().top + window.scrollY - 80;
-      window.scrollTo({ top: y, behavior: 'smooth' });
-    }
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
   };
 
   const step             = ALL_STEPS[activeIndex];
@@ -98,7 +111,7 @@ export default function HireProcessSection() {
 
   return (
     <section>
-      {/* ── Section header (scrolls away normally) ──────────────── */}
+      {/* Section header */}
       <div className="text-center pt-4 pb-8">
         <span className="inline-flex items-center px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold uppercase tracking-widest mb-4">
           How it works
@@ -106,8 +119,11 @@ export default function HireProcessSection() {
         <h2 className="text-2xl md:text-3xl font-headline font-bold text-foreground">
           Your Hire Journey
         </h2>
-        <p className="text-sm text-muted-foreground mt-2">
+        <p className="text-sm text-muted-foreground mt-2 hidden md:block">
           11 steps from first enquiry to event day — scroll to explore.
+        </p>
+        <p className="text-sm text-muted-foreground mt-2 md:hidden">
+          Swipe through 11 steps from enquiry to event day.
         </p>
       </div>
 
@@ -120,7 +136,7 @@ export default function HireProcessSection() {
         <div className="sticky top-0 h-screen flex items-center py-6">
           <div className="w-full flex h-full max-h-[640px] rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
 
-            {/* Left sidebar — step list */}
+            {/* Sidebar — step list */}
             <div className="w-56 shrink-0 border-r border-border flex flex-col overflow-y-auto p-5 gap-5">
               {PHASES.map((phase, pi) => (
                 <div key={phase.label}>
@@ -159,10 +175,8 @@ export default function HireProcessSection() {
               ))}
             </div>
 
-            {/* Right — animated step content */}
+            {/* Animated content */}
             <div className="flex-1 relative flex flex-col items-center justify-center px-12 overflow-hidden">
-
-              {/* Watermark step number */}
               <span
                 aria-hidden
                 className="absolute text-[200px] font-black text-primary/[0.04] select-none pointer-events-none leading-none"
@@ -171,7 +185,6 @@ export default function HireProcessSection() {
                 {String(step.n).padStart(2, '0')}
               </span>
 
-              {/* Animated step card — key swap triggers animate-in */}
               <div
                 key={animKey}
                 className={cn(
@@ -189,116 +202,153 @@ export default function HireProcessSection() {
                 <p className="text-muted-foreground leading-relaxed max-w-sm mx-auto">
                   {step.desc}
                 </p>
-
                 {isLast && (
                   <button
                     onClick={scrollToForm}
                     className="mt-8 inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold text-sm hover:bg-primary/90 transition-colors shadow-md"
                   >
-                    Start your enquiry
-                    <ChevronRight className="h-4 w-4" />
+                    Start your enquiry <ChevronRight className="h-4 w-4" />
                   </button>
                 )}
               </div>
 
-              {/* Step counter */}
               <div className="absolute top-5 right-6 text-xs font-medium text-muted-foreground tabular-nums">
                 {activeIndex + 1} / {ALL_STEPS.length}
               </div>
-
-              {/* Dot progress */}
               <div className="absolute bottom-6 flex items-center gap-1.5">
                 {ALL_STEPS.map((_, i) => (
-                  <span
-                    key={i}
-                    className={cn(
-                      'rounded-full transition-all duration-300',
-                      i === activeIndex ? 'w-6 h-2 bg-primary' :
-                      i < activeIndex   ? 'w-2 h-2 bg-primary/40' :
-                                          'w-2 h-2 bg-border',
-                    )}
-                  />
+                  <span key={i} className={cn(
+                    'rounded-full transition-all duration-300',
+                    i === activeIndex ? 'w-6 h-2 bg-primary' :
+                    i < activeIndex   ? 'w-2 h-2 bg-primary/40' :
+                                        'w-2 h-2 bg-border',
+                  )} />
                 ))}
               </div>
             </div>
-
           </div>
         </div>
       </div>
 
-      {/* ══ MOBILE — tap carousel ══════════════════════════════════ */}
-      <div className="md:hidden rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+      {/* ══ MOBILE — swipeable card carousel ══════════════════════ */}
+      <div className="md:hidden">
 
-        {/* Top progress bar */}
-        <div className="h-1 bg-border">
-          <div
-            className="h-full bg-primary transition-all duration-300"
-            style={{ width: `${((activeIndex + 1) / ALL_STEPS.length) * 100}%` }}
-          />
-        </div>
+        {/* Scroll-snap track — bleeds to screen edges so cards peek */}
+        <div
+          ref={carouselRef}
+          onScroll={onCarouselScroll}
+          className="flex overflow-x-auto snap-x snap-mandatory gap-4 px-4 pb-4 -mx-4"
+          style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+        >
+          {ALL_STEPS.map((s, i) => (
+            <div
+              key={s.n}
+              className="snap-center shrink-0 w-[82%] first:pl-0 last:pr-0"
+            >
+              {/* Physical card */}
+              <div className="relative bg-card rounded-3xl border border-border shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] overflow-hidden flex flex-col min-h-[260px]">
 
-        {/* Step content */}
-        <div className="px-6 pt-8 pb-4 text-center min-h-[260px] flex flex-col justify-center">
-          <span className="inline-flex items-center px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold mb-4 mx-auto">
-            {step.phase}
-          </span>
-          <div
-            key={animKey}
-            className={cn(
-              'animate-in fade-in duration-400',
-              direction === 'down' ? 'slide-in-from-right-4' : 'slide-in-from-left-4',
-            )}
-          >
-            <div className="text-6xl font-black text-primary/10 leading-none mb-3 select-none">
-              {String(step.n).padStart(2, '0')}
+                {/* Coloured top strip */}
+                <div className="h-1 w-full" style={{ background: s.color }} />
+
+                {/* Card body */}
+                <div className="flex-1 flex flex-col px-6 pt-6 pb-5">
+                  {/* Phase + step counter */}
+                  <div className="flex items-center justify-between mb-4">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-widest"
+                      style={{ color: s.color }}
+                    >
+                      {s.phase}
+                    </span>
+                    <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
+                      {i + 1} / {ALL_STEPS.length}
+                    </span>
+                  </div>
+
+                  {/* Step number watermark + content */}
+                  <div className="relative flex-1 flex flex-col justify-center">
+                    <span
+                      aria-hidden
+                      className="absolute -right-2 -bottom-2 text-[96px] font-black leading-none select-none pointer-events-none"
+                      style={{ color: s.color, opacity: 0.06 }}
+                    >
+                      {String(s.n).padStart(2, '0')}
+                    </span>
+
+                    {/* Step circle */}
+                    <span
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white mb-4 shrink-0"
+                      style={{ background: s.color }}
+                    >
+                      {s.n}
+                    </span>
+
+                    <h3 className="text-base font-bold text-foreground mb-2 leading-snug pr-8">
+                      {s.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {s.desc}
+                    </p>
+                  </div>
+
+                  {/* CTA on last card */}
+                  {i === ALL_STEPS.length - 1 && (
+                    <button
+                      onClick={scrollToForm}
+                      className="mt-5 w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-xl font-semibold text-sm hover:bg-primary/90 transition-colors"
+                    >
+                      Start your enquiry <ChevronRight className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-            <h3 className="text-lg font-bold text-foreground mb-2">{step.title}</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">{step.desc}</p>
-          </div>
+          ))}
+
+          {/* Trailing spacer so last card can centre */}
+          <div className="shrink-0 w-4" aria-hidden />
         </div>
 
-        {/* Prev / dots / next */}
-        <div className="flex items-center justify-between px-4 pb-6 gap-3">
+        {/* Dot progress + prev/next */}
+        <div className="flex items-center justify-between px-4 mt-3">
           <button
-            onClick={() => goTo(activeIndex - 1)}
+            onClick={() => scrollToCard(activeIndex - 1)}
             disabled={activeIndex === 0}
             aria-label="Previous step"
-            className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+            className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
 
-          <div className="flex items-center gap-1 flex-wrap justify-center">
+          <div className="flex items-center gap-1">
             {ALL_STEPS.map((_, i) => (
-              <span
+              <button
                 key={i}
+                onClick={() => scrollToCard(i)}
+                aria-label={`Go to step ${i + 1}`}
                 className={cn(
                   'rounded-full transition-all duration-300',
-                  i === activeIndex ? 'w-4 h-1.5 bg-primary' :
-                  i < activeIndex   ? 'w-1.5 h-1.5 bg-primary/40' :
-                                      'w-1.5 h-1.5 bg-border',
+                  i === activeIndex ? 'w-4 h-2 bg-primary' :
+                  i < activeIndex   ? 'w-2 h-2 bg-primary/40' :
+                                      'w-2 h-2 bg-border',
                 )}
               />
             ))}
           </div>
 
-          {isLast ? (
-            <button
-              onClick={scrollToForm}
-              aria-label="Start enquiry"
-              className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              onClick={() => goTo(activeIndex + 1)}
-              aria-label="Next step"
-              className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary transition-colors"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          )}
+          <button
+            onClick={() => isLast ? scrollToForm() : scrollToCard(activeIndex + 1)}
+            aria-label={isLast ? 'Start enquiry' : 'Next step'}
+            className={cn(
+              'w-9 h-9 rounded-full flex items-center justify-center transition-colors',
+              isLast
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                : 'border border-border text-muted-foreground hover:text-primary hover:border-primary',
+            )}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </section>
