@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import FAQItem from '@/components/FAQItem';
 import FAQCategoryNav from '@/components/FAQCategoryNav';
-import { Search, X, Info, Loader2 } from 'lucide-react';
+import { Search, X, Loader2 } from 'lucide-react';
+import HireJourneyAccordion from '@/components/HireJourneyAccordion';
 import { useFirebase } from '@/firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 
@@ -221,15 +222,12 @@ export default function FAQClient() {
       </div>
 
       {/* ── HERO ── */}
-      <section className="container mx-auto px-4 pt-16 pb-10 text-center max-w-3xl">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 border-2 border-primary/20 mb-6">
-          <Info className="h-6 w-6 text-primary" />
-        </div>
-        <h1 className="text-4xl md:text-5xl font-headline font-bold tracking-tight text-foreground mb-4">
+      <section className="container mx-auto px-4 pt-8 pb-6 text-center max-w-3xl">
+        <h1 className="text-2xl md:text-3xl font-headline font-bold tracking-tight text-foreground mb-2">
           Frequently Asked{' '}
           <span className="text-primary">Questions</span>
         </h1>
-        <p className="text-lg text-muted-foreground leading-relaxed max-w-xl mx-auto mb-8">
+        <p className="text-sm text-muted-foreground max-w-xl mx-auto mb-6">
           Everything you need to know about hiring and using the Bishops Hull Hub.
         </p>
 
@@ -261,6 +259,11 @@ export default function FAQClient() {
           </p>
         )}
       </section>
+
+      {/* ── HIRE JOURNEY ACCORDION ── */}
+      <div className="container mx-auto px-4 max-w-6xl mb-8">
+        <HireJourneyAccordion />
+      </div>
 
       {/* ── BODY ── */}
       <div className="container mx-auto px-4 pb-24 max-w-6xl flex flex-col md:flex-row gap-8 md:gap-10 items-start">
