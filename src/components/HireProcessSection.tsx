@@ -104,7 +104,7 @@ export default function HireProcessSection() {
   return (
     <section>
       {/* Section header */}
-      <div className="text-center pt-4 pb-4 md:pb-2">
+      <div className="text-center pt-4 pb-4 md:pb-1">
         <span className="inline-flex items-center px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold uppercase tracking-widest mb-3">
           How it works
         </span>
@@ -128,10 +128,20 @@ export default function HireProcessSection() {
         <div className="sticky top-20 h-[calc(100vh-5rem)] flex items-center">
           <div className="relative w-full">
 
-            {/* Coloured blobs sit *behind* the glass to give it something to refract */}
-            <div aria-hidden className="absolute inset-0 -m-6 overflow-hidden rounded-[2rem] pointer-events-none">
+            {/* Coloured blobs sit *behind* the glass to give it something to refract.
+                Wrapped in a softly-masked container so the colour fades into the page at the slab edges. */}
+            <div
+              aria-hidden
+              className="absolute inset-0 -m-10 overflow-hidden rounded-[2.5rem] pointer-events-none"
+              style={{
+                WebkitMaskImage:
+                  'radial-gradient(ellipse 75% 80% at 50% 50%, black 45%, transparent 100%)',
+                maskImage:
+                  'radial-gradient(ellipse 75% 80% at 50% 50%, black 45%, transparent 100%)',
+              }}
+            >
               <div
-                className="absolute w-[20rem] h-[20rem] rounded-full blur-3xl opacity-60 transition-all duration-1000 ease-out"
+                className="absolute w-[20rem] h-[20rem] rounded-full blur-3xl opacity-40 transition-all duration-1000 ease-out"
                 style={{
                   background: PHASES[0].color,
                   top:  `${10 + activeIndex * 4}%`,
@@ -139,7 +149,7 @@ export default function HireProcessSection() {
                 }}
               />
               <div
-                className="absolute w-[26rem] h-[26rem] rounded-full blur-3xl opacity-50 transition-all duration-1000 ease-out"
+                className="absolute w-[26rem] h-[26rem] rounded-full blur-3xl opacity-35 transition-all duration-1000 ease-out"
                 style={{
                   background: PHASES[1].color,
                   top:   `${30 - activeIndex * 2}%`,
@@ -147,7 +157,7 @@ export default function HireProcessSection() {
                 }}
               />
               <div
-                className="absolute w-[24rem] h-[24rem] rounded-full blur-3xl opacity-40 transition-all duration-1000 ease-out"
+                className="absolute w-[24rem] h-[24rem] rounded-full blur-3xl opacity-30 transition-all duration-1000 ease-out"
                 style={{
                   background: PHASES[2].color,
                   bottom: `${-5 + activeIndex * 2}%`,
@@ -156,35 +166,42 @@ export default function HireProcessSection() {
               />
             </div>
 
-            {/* The liquid-glass slab — no hard border, just a soft top specular + diffuse glow */}
+            {/* The liquid-glass slab — soft top specular, diffuse glow, edges fade into the page */}
             <div
-              className="relative w-full flex h-[440px] rounded-[2rem] bg-white/20 backdrop-blur-2xl overflow-hidden"
+              className="relative w-full flex h-[480px] rounded-[2rem] bg-white/20 backdrop-blur-2xl overflow-hidden"
               style={{
                 boxShadow:
-                  '0 40px 80px -40px rgba(20,80,70,0.18), ' +     // soft, page-tinted ground shadow
-                  'inset 0 1px 0 rgba(255,255,255,0.55), ' +      // top specular highlight
-                  'inset 0 -1px 0 rgba(255,255,255,0.15)',        // faint bottom rim catch
+                  '0 50px 100px -50px rgba(20,80,70,0.14), ' +    // softer, more diffuse ground shadow
+                  'inset 0 1px 0 rgba(255,255,255,0.5), ' +       // top specular highlight
+                  'inset 0 -1px 0 rgba(255,255,255,0.12)',        // faint bottom rim catch
+                WebkitMaskImage:
+                  'radial-gradient(ellipse 100% 100% at 50% 50%, black 70%, transparent 100%)',
+                maskImage:
+                  'radial-gradient(ellipse 100% 100% at 50% 50%, black 70%, transparent 100%)',
               }}
             >
 
-              {/* Sidebar — step list (subtle column tint, no hard divider) */}
-              <div className="w-52 shrink-0 bg-white/15 flex flex-col overflow-y-auto p-4 gap-4 relative z-10">
+              {/* Sidebar — step list (subtle column tint, no hard divider, hidden scrollbar) */}
+              <div
+                className="w-52 shrink-0 bg-white/15 flex flex-col overflow-y-auto px-3 py-4 gap-3 relative z-10 [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: 'none' } as React.CSSProperties}
+              >
                 {PHASES.map((phase, pi) => (
                   <div key={phase.label}>
                     <p className={cn(
-                      'text-[10px] font-bold uppercase tracking-widest mb-1.5 transition-colors duration-300',
+                      'text-[10px] font-bold uppercase tracking-widest mb-1 transition-colors duration-300',
                       activePhaseIndex === pi ? 'text-primary' : 'text-muted-foreground/50',
                     )}>
                       {phase.label}
                     </p>
-                    <div className="space-y-0.5">
+                    <div className="space-y-px">
                       {phase.steps.map(s => {
                         const idx      = ALL_STEPS.findIndex(x => x.n === s.n);
                         const isActive = idx === activeIndex;
                         const isDone   = idx < activeIndex;
                         return (
                           <div key={s.n} className={cn(
-                            'flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-all duration-300',
+                            'flex items-center gap-2 px-2 py-1 rounded-lg text-xs transition-all duration-300',
                             isActive ? 'bg-white/70 text-primary font-semibold shadow-sm backdrop-blur-sm' :
                             isDone   ? 'text-foreground/60' :
                                        'text-muted-foreground/40',
