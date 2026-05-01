@@ -7,7 +7,60 @@ import { formatCustomerConfirmationEmail } from '@/ai/flows/format-customer-conf
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const ADMIN_EMAIL = 'bishopshullhub@gmail.com';
+const ADMIN_EMAIL = 'bhhubbookings@gmail.com';
+
+function buildFallbackAdminEmail(enquiryData: any) {
+  const subject = `New Booking Enquiry: ${enquiryData.typeOfEvent || 'Event'} on ${enquiryData.dateRequired || 'TBC'}`;
+  const textBody = `NEW BOOKING ENQUIRY
+-------------------
+Enquiry ID: ${enquiryData.id}
+Submitted:  ${enquiryData.submissionDateTime}
+
+Event:       ${enquiryData.typeOfEvent}
+Date:        ${enquiryData.dateRequired}
+Times:       ${enquiryData.startTime} – ${enquiryData.endTime}
+Attendance:  ${enquiryData.estimatedAttendance}
+
+Hirer:             ${enquiryData.name}
+Email:             ${enquiryData.emailAddress}
+Phone:             ${enquiryData.phoneNumber}
+Address:           ${enquiryData.postalAddress}, ${enquiryData.postcode}
+Preferred contact: ${enquiryData.preferredContact}
+
+Requirements:
+${enquiryData.additionalRequirements}`;
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+      <div style="background-color: #1a4d46; color: #fff; padding: 24px; text-align: center;">
+        <h1 style="margin: 0; font-size: 22px;">New Booking Enquiry</h1>
+        <p style="margin: 4px 0 0; opacity: 0.85; font-size: 13px;">Enquiry ID: ${enquiryData.id}</p>
+      </div>
+      <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
+        <h2 style="margin-top: 0; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Event</h2>
+        <p style="margin:4px 0;"><strong>Type:</strong> ${enquiryData.typeOfEvent}</p>
+        <p style="margin:4px 0;"><strong>Date:</strong> ${enquiryData.dateRequired}</p>
+        <p style="margin:4px 0;"><strong>Times:</strong> ${enquiryData.startTime} – ${enquiryData.endTime}</p>
+        <p style="margin:4px 0;"><strong>Attendance:</strong> ${enquiryData.estimatedAttendance}</p>
+
+        <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Hirer</h2>
+        <p style="margin:4px 0;"><strong>Name:</strong> ${enquiryData.name}</p>
+        <p style="margin:4px 0;"><strong>Email:</strong> ${enquiryData.emailAddress}</p>
+        <p style="margin:4px 0;"><strong>Phone:</strong> ${enquiryData.phoneNumber}</p>
+        <p style="margin:4px 0;"><strong>Address:</strong> ${enquiryData.postalAddress}, ${enquiryData.postcode}</p>
+        <p style="margin:4px 0;"><strong>Preferred contact:</strong> ${enquiryData.preferredContact}</p>
+
+        <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Requirements</h2>
+        <p style="margin:4px 0; white-space: pre-wrap;">${enquiryData.additionalRequirements}</p>
+
+        <p style="font-size: 12px; color: #64748b; margin-top: 28px; text-align: center;">
+          Bishops Hull Hub Automated Booking System
+        </p>
+      </div>
+    </div>`;
+
+  return { subject, htmlBody, textBody };
+}
 
 /**
  * Server Action to handle the logic of sending the enquiry email to administrators
@@ -18,9 +71,15 @@ export async function sendEnquiryEmailAction(enquiryData: any) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const faqUrl = `${baseUrl}/faq`;
 
-    // 1. Format and send Admin Notification
-    const adminEmail = await formatEnquiryEmail({ enquiryData });
-    
+    // 1. Format Admin Notification — fall back to a static template if AI is unavailable
+    let adminEmail;
+    try {
+      adminEmail = await formatEnquiryEmail({ enquiryData });
+    } catch (aiError: any) {
+      console.error('AI formatting failed for admin enquiry email, using fallback:', aiError);
+      adminEmail = buildFallbackAdminEmail(enquiryData);
+    }
+
     // 2. Format and send Customer Confirmation
     const customerEmail = await formatCustomerConfirmationEmail({ enquiryData, faqUrl });
 
