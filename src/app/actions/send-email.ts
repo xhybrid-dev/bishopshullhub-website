@@ -4,6 +4,11 @@
 import { formatEnquiryEmail } from '@/ai/flows/format-enquiry-email-flow';
 import { formatReviewEmail } from '@/ai/flows/format-review-email-flow';
 import { formatCustomerConfirmationEmail } from '@/ai/flows/format-customer-confirmation-email-flow';
+import {
+  formatHireConfirmationInviteEmail,
+  formatHireConfirmationAdminEmail,
+  formatHireConfirmationCustomerEmail,
+} from '@/ai/flows/format-hire-confirmation-email-flow';
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -207,5 +212,121 @@ Review here: ${reviewUrl}
   } catch (error: any) {
     console.error('Failed to send security email:', error);
     return { success: false, error: error.message || 'Failed to dispatch security emails' };
+  }
+}
+
+/**
+ * Server Action — admin clicks "Send Confirmation": email the hirer a link to /confirm/[id]
+ * where they accept the conditions, supply bank details and sign.
+ */
+export async function sendHireConfirmationInviteAction(enquiryData: any, baseUrl: string) {
+  try {
+    if (!enquiryData?.emailAddress) {
+      return { success: false, error: 'Enquiry has no email address.' };
+    }
+
+    const confirmUrl = `${baseUrl}/confirm/${enquiryData.id}`;
+    const email = await formatHireConfirmationInviteEmail({ enquiryData, confirmUrl });
+
+    if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('re_your_api_key')) {
+      const { error } = await resend.emails.send({
+        from: 'Bishops Hull Hub <bookings@bishopshullhub.co.uk>',
+        to: enquiryData.emailAddress,
+        subject: email.subject,
+        html: email.htmlBody,
+        text: email.textBody,
+        replyTo: ADMIN_EMAIL,
+      });
+      if (error) throw new Error(`Resend Error: ${error.message}`);
+    } else {
+      console.log('--- HIRE CONFIRMATION INVITE SIMULATION ---');
+      console.log('To:', enquiryData.emailAddress);
+      console.log('Subject:', email.subject);
+      console.log('Confirm Link:', confirmUrl);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to send hire confirmation invite:', error);
+    return { success: false, error: error.message || 'Failed to send confirmation invite' };
+  }
+}
+
+/**
+ * Server Action — hirer submits the public confirmation form. Sends:
+ *  - the signed agreement (with bank details) to the bookings inbox
+ *  - a thank-you to the hirer
+ * The signature image (data URL) is attached to the admin email as a PNG.
+ */
+export async function submitHireConfirmationAction(input: {
+  enquiryData: any;
+  confirmation: {
+    yourName: string;
+    yourEmail: string;
+    organisation: string;
+    confirmedAt: string;
+    bookingDate: string;
+    startTime: string;
+    endTime: string;
+    bankName: string;
+    accountNumber: string;
+    sortCode: string;
+    accountName: string;
+    signatureDataUrl: string;
+  };
+}) {
+  try {
+    const { enquiryData, confirmation } = input;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const hireConditionsUrl = `${baseUrl}/hire-agreement`;
+
+    const adminEmail = await formatHireConfirmationAdminEmail({ enquiryData, confirmation });
+    const customerEmail = await formatHireConfirmationCustomerEmail({
+      enquiryData,
+      confirmation: {
+        yourName: confirmation.yourName,
+        bookingDate: confirmation.bookingDate,
+        startTime: confirmation.startTime,
+        endTime: confirmation.endTime,
+      },
+      hireConditionsUrl,
+    });
+
+    const signatureBase64 = (confirmation.signatureDataUrl || '').split(',')[1];
+    const attachments = signatureBase64
+      ? [{ filename: 'signature.png', content: signatureBase64 }]
+      : undefined;
+
+    if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('re_your_api_key')) {
+      const { error: adminErr } = await resend.emails.send({
+        from: 'Hub Bookings <bookings@bishopshullhub.co.uk>',
+        to: ADMIN_EMAIL,
+        subject: adminEmail.subject,
+        html: adminEmail.htmlBody,
+        text: adminEmail.textBody,
+        attachments,
+        replyTo: confirmation.yourEmail || enquiryData.emailAddress,
+      });
+      if (adminErr) throw new Error(`Resend Error (admin): ${adminErr.message}`);
+
+      const { error: custErr } = await resend.emails.send({
+        from: 'Bishops Hull Hub <noreply@bishopshullhub.co.uk>',
+        to: confirmation.yourEmail || enquiryData.emailAddress,
+        subject: customerEmail.subject,
+        html: customerEmail.htmlBody,
+        text: customerEmail.textBody,
+        replyTo: ADMIN_EMAIL,
+      });
+      if (custErr) throw new Error(`Resend Error (customer): ${custErr.message}`);
+    } else {
+      console.log('--- HIRE CONFIRMATION SUBMITTED SIMULATION ---');
+      console.log('Admin email subject:', adminEmail.subject);
+      console.log('Customer email subject:', customerEmail.subject);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to send hire confirmation emails:', error);
+    return { success: false, error: error.message || 'Failed to send confirmation emails' };
   }
 }

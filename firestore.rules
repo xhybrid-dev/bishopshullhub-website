@@ -49,12 +49,21 @@ service cloud.firestore {
       // Submission
       allow create: if isSignedIn() && matchesPathId(enquiryId);
       
-      // Update: Admin can update anything. 
+      // Update: Admin can update anything.
       // Security Team (public) can ONLY update the 'status' to 'Reviewed'.
+      // Hirer (public) can submit hire confirmation if confirmationStatus moves Sent -> Submitted.
       allow update: if (isExistingAdmin() && idIsImmutable()) || (
-        request.resource.data.status == 'Reviewed' && 
+        request.resource.data.status == 'Reviewed' &&
         request.resource.data.id == resource.data.id &&
         request.resource.data.name == resource.data.name // Ensure other data stays consistent
+      ) || (
+        request.resource.data.confirmationStatus == 'Submitted' &&
+        resource.data.confirmationStatus == 'Sent' &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.name == resource.data.name &&
+        request.resource.data.dateRequired == resource.data.dateRequired &&
+        request.resource.data.emailAddress == resource.data.emailAddress &&
+        request.resource.data.status == resource.data.status
       );
 
       allow delete: if isExistingAdmin();

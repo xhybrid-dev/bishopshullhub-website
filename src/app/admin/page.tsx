@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, LayoutDashboard, LogOut, Inbox, User, Mail, Phone, Clock, Calendar, ShieldAlert, Key, LogIn, FileText, CheckCircle2, MoreVertical, ArrowRight, XCircle, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, UserPlus, Trash2, Send, AlertCircle, Info, HelpCircle, Plus, Pencil, Save } from 'lucide-react';
+import { Loader2, LayoutDashboard, LogOut, Inbox, User, Mail, Phone, Clock, Calendar, ShieldAlert, Key, LogIn, FileText, CheckCircle2, MoreVertical, ArrowRight, XCircle, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, UserPlus, Trash2, Send, AlertCircle, Info, HelpCircle, Plus, Pencil, Save, FileSignature } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, useDoc, setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, orderBy, updateDoc, onSnapshot } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { sendSecurityReviewEmailAction } from '@/app/actions/send-email';
+import { sendSecurityReviewEmailAction, sendHireConfirmationInviteAction } from '@/app/actions/send-email';
 import { format, isWithinInterval, addDays, startOfToday, parseISO } from 'date-fns';
 
 const STATUS_COLUMNS = [
@@ -128,6 +128,24 @@ export default function AdminPortal() {
       toast({ title: "Status Updated", description: `Enquiry set to ${newStatus}.` });
     } catch (error) {
       toast({ variant: "destructive", title: "Update Failed", description: "Permissions error." });
+    }
+  };
+
+  const handleSendConfirmation = async (enquiry: any) => {
+    try {
+      const baseUrl = window.location.origin;
+      // Mark Sent in Firestore first so the public page can validate the link.
+      const docRef = doc(firestore, 'booking_enquiries', enquiry.id);
+      await updateDoc(docRef, { confirmationStatus: 'Sent', confirmationSentAt: new Date().toISOString() });
+
+      const result = await sendHireConfirmationInviteAction(enquiry, baseUrl);
+      if (result.success) {
+        toast({ title: "Confirmation Sent", description: `Hirer ${enquiry.name} has been emailed the confirmation link.` });
+      } else {
+        toast({ variant: "destructive", title: "Send Failed", description: result.error || "Could not send confirmation email." });
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Send Failed", description: err.message || "An unexpected error occurred." });
     }
   };
 
@@ -289,7 +307,7 @@ export default function AdminPortal() {
                       </div>
                       <div className="flex flex-col gap-4 bg-muted/20 p-3 rounded-2xl min-h-[400px] border-2 border-dashed border-muted">
                         {enquiries.filter(e => (e.status || 'Pending') === col.id).map(e => (
-                          <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} />
+                          <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} />
                         ))}
                       </div>
                     </div>
@@ -297,7 +315,7 @@ export default function AdminPortal() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {enquiries.map(e => <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} isList />)}
+                  {enquiries.map(e => <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} isList />)}
                 </div>
               )
             ) : (
@@ -429,9 +447,10 @@ export default function AdminPortal() {
   );
 }
 
-function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, isList }: { enquiry: any, onUpdateStatus: (id: string, s: string) => void, onSendToSecurity: (e: any) => void, isList?: boolean }) {
+function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, onSendConfirmation, isList }: { enquiry: any, onUpdateStatus: (id: string, s: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, isList?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isSendingConfirm, setIsSendingConfirm] = useState(false);
 
   const handleReviewClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -439,6 +458,16 @@ function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, isList }: { enq
     await onSendToSecurity(enquiry);
     setIsSending(false);
   };
+
+  const handleConfirmClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsSendingConfirm(true);
+    await onSendConfirmation(enquiry);
+    setIsSendingConfirm(false);
+  };
+
+  const confirmationStatus = enquiry.confirmationStatus as ('NotSent' | 'Sent' | 'Submitted' | undefined);
+  const showConfirmButton = enquiry.status === 'Reviewed' || enquiry.status === 'Confirmed';
 
   return (
     <Card className={cn("border shadow-sm hover:shadow-md transition-all bg-white cursor-pointer overflow-hidden", isExpanded && "ring-2 ring-primary")} onClick={() => setIsExpanded(!isExpanded)}>
@@ -502,6 +531,26 @@ function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, isList }: { enq
             {isSending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
             Request Security Review
           </Button>
+        )}
+
+        {showConfirmButton && confirmationStatus !== 'Submitted' && (
+          <Button
+            variant="default"
+            size="sm"
+            className="w-full gap-2 text-[10px] h-8 mt-2"
+            onClick={handleConfirmClick}
+            disabled={isSendingConfirm}
+          >
+            {isSendingConfirm ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileSignature className="h-3 w-3" />}
+            {confirmationStatus === 'Sent' ? 'Resend Confirmation' : 'Send Confirmation'}
+          </Button>
+        )}
+
+        {confirmationStatus === 'Submitted' && (
+          <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-md py-1.5 mt-2">
+            <CheckCircle2 className="h-3 w-3" />
+            Hire Confirmed by Hirer
+          </div>
         )}
       </div>
     </Card>
