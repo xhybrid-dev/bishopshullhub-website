@@ -13,6 +13,7 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const ADMIN_EMAIL = 'bhhubbookings@gmail.com';
+const TREASURER_EMAIL = 'jdlee9900@gmail.com';
 
 function buildFallbackAdminEmail(enquiryData: any) {
   const subject = `New Booking Enquiry: ${enquiryData.typeOfEvent || 'Event'} on ${enquiryData.dateRequired || 'TBC'}`;
@@ -329,4 +330,122 @@ export async function submitHireConfirmationAction(input: {
     console.error('Failed to send hire confirmation emails:', error);
     return { success: false, error: error.message || 'Failed to send confirmation emails' };
   }
+}
+
+/**
+ * Server Action — admin clicks "Full Deposit Return" or "Deduction" on the
+ * Deposit Details panel. Emails the Treasurer with the hirer's bank details
+ * and the amount to refund (full or partial, with reason for any deduction).
+ */
+export async function sendDepositReturnEmailAction(input: {
+  enquiryData: any;
+  amount: number;
+  fullDeposit: number;
+  isFullReturn: boolean;
+  reason?: string;
+}) {
+  try {
+    const { enquiryData, amount, fullDeposit, isFullReturn, reason } = input;
+    const confirmation = enquiryData.confirmation || {};
+    const deduction = Math.max(0, fullDeposit - amount);
+
+    const subject = isFullReturn
+      ? `Deposit Return Authorised: ${enquiryData.name} (£${amount.toFixed(2)})`
+      : `Deposit Return with Deduction: ${enquiryData.name} (£${amount.toFixed(2)} of £${fullDeposit.toFixed(2)})`;
+
+    const textBody = `DEPOSIT RETURN AUTHORISATION
+----------------------------
+Hirer:         ${enquiryData.name}
+Event:         ${enquiryData.typeOfEvent}
+Hire Date:     ${enquiryData.dateRequired}
+Times:         ${enquiryData.startTime} – ${enquiryData.endTime}
+Enquiry ID:    ${enquiryData.id}
+
+Original Deposit:   £${fullDeposit.toFixed(2)}
+Amount to Return:   £${amount.toFixed(2)}
+${isFullReturn ? '' : `Deduction:          £${deduction.toFixed(2)}\nReason:             ${reason || 'Not provided'}\n`}
+Bank Details
+------------
+Account Name:    ${confirmation.accountName || 'Not provided'}
+Bank Name:       ${confirmation.bankName || 'Not provided'}
+Account Number:  ${confirmation.accountNumber || 'Not provided'}
+Sort Code:       ${formatSortCode(confirmation.sortCode)}
+
+Hirer Contact:   ${enquiryData.emailAddress} / ${enquiryData.phoneNumber}
+`.trim();
+
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+        <div style="background-color: #1a4d46; color: #fff; padding: 24px; text-align: center;">
+          <h1 style="margin: 0; font-size: 22px;">Deposit Return Authorisation</h1>
+          <p style="margin: 4px 0 0; opacity: 0.85; font-size: 13px;">Enquiry ID: ${enquiryData.id}</p>
+        </div>
+        <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
+          <h2 style="margin-top: 0; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Hire Summary</h2>
+          <p style="margin:4px 0;"><strong>Hirer:</strong> ${enquiryData.name}</p>
+          <p style="margin:4px 0;"><strong>Event:</strong> ${enquiryData.typeOfEvent}</p>
+          <p style="margin:4px 0;"><strong>Hire Date:</strong> ${enquiryData.dateRequired}</p>
+          <p style="margin:4px 0;"><strong>Times:</strong> ${enquiryData.startTime} – ${enquiryData.endTime}</p>
+
+          <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Refund</h2>
+          <p style="margin:4px 0;"><strong>Original Deposit:</strong> £${fullDeposit.toFixed(2)}</p>
+          <p style="margin:4px 0;"><strong>Amount to Return:</strong> <span style="color:#15803d; font-weight:bold;">£${amount.toFixed(2)}</span></p>
+          ${isFullReturn ? '' : `
+            <p style="margin:4px 0;"><strong>Deduction:</strong> £${deduction.toFixed(2)}</p>
+            <p style="margin:4px 0;"><strong>Reason:</strong> ${escapeHtml(reason || 'Not provided')}</p>
+          `}
+
+          <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Bank Details</h2>
+          <p style="margin:4px 0;"><strong>Account Name:</strong> ${escapeHtml(confirmation.accountName || 'Not provided')}</p>
+          <p style="margin:4px 0;"><strong>Bank Name:</strong> ${escapeHtml(confirmation.bankName || 'Not provided')}</p>
+          <p style="margin:4px 0;"><strong>Account Number:</strong> ${escapeHtml(confirmation.accountNumber || 'Not provided')}</p>
+          <p style="margin:4px 0;"><strong>Sort Code:</strong> ${escapeHtml(formatSortCode(confirmation.sortCode))}</p>
+
+          <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Hirer Contact</h2>
+          <p style="margin:4px 0;">${escapeHtml(enquiryData.emailAddress || '')} / ${escapeHtml(enquiryData.phoneNumber || '')}</p>
+
+          <p style="font-size: 12px; color: #64748b; margin-top: 28px; text-align: center;">
+            Bishops Hull Hub Automated Booking System
+          </p>
+        </div>
+      </div>`;
+
+    if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('re_your_api_key')) {
+      const { error } = await resend.emails.send({
+        from: 'Hub Bookings <bookings@bishopshullhub.co.uk>',
+        to: TREASURER_EMAIL,
+        subject,
+        html: htmlBody,
+        text: textBody,
+        replyTo: ADMIN_EMAIL,
+      });
+      if (error) throw new Error(`Resend Error: ${error.message}`);
+    } else {
+      console.log('--- DEPOSIT RETURN EMAIL SIMULATION ---');
+      console.log('To Treasurer:', TREASURER_EMAIL);
+      console.log('Subject:', subject);
+      console.log(textBody);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to send deposit return email:', error);
+    return { success: false, error: error.message || 'Failed to send deposit return email' };
+  }
+}
+
+function formatSortCode(sortCode?: string) {
+  if (!sortCode) return 'Not provided';
+  const digits = sortCode.replace(/\D/g, '');
+  if (digits.length !== 6) return sortCode;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 6)}`;
+}
+
+function escapeHtml(s: string) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, LayoutDashboard, LogOut, Inbox, User, Mail, Phone, Clock, Calendar, ShieldAlert, Key, LogIn, FileText, CheckCircle2, MoreVertical, ArrowRight, XCircle, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, UserPlus, Trash2, Send, AlertCircle, Info, HelpCircle, Plus, Pencil, Save, FileSignature } from 'lucide-react';
+import { Loader2, LayoutDashboard, LogOut, Inbox, User, Mail, Phone, Clock, Calendar, ShieldAlert, Key, LogIn, FileText, CheckCircle2, MoreVertical, ArrowRight, XCircle, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, UserPlus, Trash2, Send, AlertCircle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, useDoc, setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, orderBy, updateDoc, onSnapshot } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
@@ -16,15 +16,31 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { sendSecurityReviewEmailAction, sendHireConfirmationInviteAction } from '@/app/actions/send-email';
+import { sendSecurityReviewEmailAction, sendHireConfirmationInviteAction, sendDepositReturnEmailAction } from '@/app/actions/send-email';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format, isWithinInterval, addDays, startOfToday, parseISO } from 'date-fns';
 
 const STATUS_COLUMNS = [
-  { id: 'Pending', label: 'Pending', color: 'bg-amber-500', icon: Clock3 },
-  { id: 'Reviewed', label: 'Reviewed', color: 'bg-blue-500', icon: FileText },
-  { id: 'Confirmed', label: 'Confirmed', color: 'bg-green-500', icon: CheckCircle2 },
-  { id: 'Rejected', label: 'Rejected', color: 'bg-red-500', icon: XCircle },
+  { id: 'Pending', label: 'Enquiry Received', color: 'bg-amber-500', icon: Clock3 },
+  { id: 'Reviewed', label: 'Visit Complete', color: 'bg-blue-500', icon: FileText },
+  { id: 'Confirmed', label: 'Hire Confirmed', color: 'bg-green-500', icon: CheckCircle2 },
+  { id: 'HireComplete', label: 'Hire Complete', color: 'bg-slate-500', icon: Calendar },
 ];
+
+const STATUS_LABELS: Record<string, string> = {
+  Pending: 'Enquiry Received',
+  Reviewed: 'Visit Complete',
+  Confirmed: 'Hire Confirmed',
+  Rejected: 'Rejected',
+};
+
+function getDepositAmount(enquiry: any): number {
+  const stored = Number(enquiry?.depositAmount ?? enquiry?.confirmation?.depositAmount);
+  if (Number.isFinite(stored) && stored > 0) return stored;
+  const end = (enquiry?.endTime || '').match(/^(\d{1,2}):/);
+  const hour = end ? Number(end[1]) : NaN;
+  return Number.isFinite(hour) && hour >= 20 ? 100 : 50;
+}
 
 const PRIMARY_ADMIN_EMAIL = 'bishopshullhub@gmail.com';
 
@@ -106,6 +122,19 @@ export default function AdminPortal() {
     return () => unsub();
   }, [firestore, hasAdminAccess]);
 
+  const depositEnquiries = useMemo(() => {
+    if (!enquiries) return [];
+    const today = startOfToday();
+    return enquiries.filter(e => {
+      if (e.confirmationStatus !== 'Submitted') return false;
+      try {
+        return parseISO(e.dateRequired) < today;
+      } catch {
+        return false;
+      }
+    }).sort((a, b) => b.dateRequired.localeCompare(a.dateRequired));
+  }, [enquiries]);
+
   const upcomingBookings = useMemo(() => {
     if (!enquiries) return [];
     const today = startOfToday();
@@ -121,6 +150,8 @@ export default function AdminPortal() {
     }).sort((a, b) => a.dateRequired.localeCompare(b.dateRequired));
   }, [enquiries]);
 
+  const [editingEnquiry, setEditingEnquiry] = useState<any | null>(null);
+
   const handleUpdateStatus = async (enquiryId: string, newStatus: string) => {
     try {
       const docRef = doc(firestore, 'booking_enquiries', enquiryId);
@@ -128,6 +159,18 @@ export default function AdminPortal() {
       toast({ title: "Status Updated", description: `Enquiry set to ${newStatus}.` });
     } catch (error) {
       toast({ variant: "destructive", title: "Update Failed", description: "Permissions error." });
+    }
+  };
+
+  const handleSaveEnquiry = async (enquiryId: string, updates: Record<string, any>) => {
+    try {
+      const docRef = doc(firestore, 'booking_enquiries', enquiryId);
+      await updateDoc(docRef, updates);
+      toast({ title: 'Booking Updated', description: 'Details saved successfully.' });
+      return true;
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not save changes.' });
+      return false;
     }
   };
 
@@ -165,6 +208,41 @@ export default function AdminPortal() {
       }
     } catch (err: any) {
       toast({ variant: "destructive", title: "Send Failed", description: err.message || "An unexpected error occurred." });
+    }
+  };
+
+  const handleSendDepositReturn = async (enquiry: any, amount: number, isFullReturn: boolean, reason?: string) => {
+    try {
+      const fullDeposit = getDepositAmount(enquiry);
+      const result = await sendDepositReturnEmailAction({
+        enquiryData: enquiry,
+        amount,
+        fullDeposit,
+        isFullReturn,
+        reason,
+      });
+      if (result.success) {
+        const docRef = doc(firestore, 'booking_enquiries', enquiry.id);
+        await updateDoc(docRef, {
+          depositReturn: {
+            amount,
+            fullDeposit,
+            isFullReturn,
+            reason: reason || null,
+            sentAt: new Date().toISOString(),
+          },
+        });
+        toast({
+          title: isFullReturn ? 'Full Deposit Return Sent' : 'Deduction Return Sent',
+          description: `Treasurer notified to refund £${amount.toFixed(2)} to ${enquiry.name}.`,
+        });
+        return true;
+      }
+      toast({ variant: 'destructive', title: 'Send Failed', description: result.error || 'Could not email the Treasurer.' });
+      return false;
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Send Failed', description: err.message || 'An unexpected error occurred.' });
+      return false;
     }
   };
 
@@ -279,6 +357,9 @@ export default function AdminPortal() {
             <TabsTrigger value="security" className="rounded-xl px-6 h-full data-[state=active]:bg-primary data-[state=active]:text-white">
               <ShieldCheck className="h-4 w-4 mr-2" /> Security Team
             </TabsTrigger>
+            <TabsTrigger value="deposits" className="rounded-xl px-6 h-full data-[state=active]:bg-primary data-[state=active]:text-white">
+              <Banknote className="h-4 w-4 mr-2" /> Deposit Details
+            </TabsTrigger>
             <TabsTrigger value="faqs" className="rounded-xl px-6 h-full data-[state=active]:bg-primary data-[state=active]:text-white">
               <HelpCircle className="h-4 w-4 mr-2" /> FAQs
             </TabsTrigger>
@@ -298,24 +379,43 @@ export default function AdminPortal() {
             ) : enquiries && enquiries.length > 0 ? (
               viewMode === 'kanban' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
-                  {STATUS_COLUMNS.map((col) => (
-                    <div key={col.id} className="flex flex-col gap-4">
-                      <div className="flex items-center gap-2 px-2">
-                        <div className={cn("w-2 h-2 rounded-full", col.color)} />
-                        <h3 className="font-bold text-primary">{col.label}</h3>
-                        <Badge variant="secondary">{enquiries.filter(e => (e.status || 'Pending') === col.id).length}</Badge>
+                  {STATUS_COLUMNS.map((col) => {
+                    const today = startOfToday();
+                    const isPastDate = (e: any) => {
+                      try { return parseISO(e.dateRequired) < today; } catch { return false; }
+                    };
+                    const inColumn = (e: any) => {
+                      const status = e.status || 'Pending';
+                      const hirerConfirmed = e.confirmationStatus === 'Submitted';
+                      if (hirerConfirmed) {
+                        if (col.id === 'HireComplete') return isPastDate(e);
+                        if (col.id === 'Confirmed') return !isPastDate(e);
+                        return false;
+                      }
+                      if (col.id === 'HireComplete') return status === 'Confirmed' && isPastDate(e);
+                      if (col.id === 'Confirmed') return status === 'Confirmed' && !isPastDate(e);
+                      return status === col.id;
+                    };
+                    const items = enquiries.filter(inColumn);
+                    return (
+                      <div key={col.id} className="flex flex-col gap-4">
+                        <div className="flex items-center gap-2 px-2">
+                          <div className={cn("w-2 h-2 rounded-full", col.color)} />
+                          <h3 className="font-bold text-primary">{col.label}</h3>
+                          <Badge variant="secondary">{items.length}</Badge>
+                        </div>
+                        <div className="flex flex-col gap-4 bg-muted/20 p-3 rounded-2xl min-h-[400px] border-2 border-dashed border-muted">
+                          {items.map(e => (
+                            <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} />
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-4 bg-muted/20 p-3 rounded-2xl min-h-[400px] border-2 border-dashed border-muted">
-                        {enquiries.filter(e => (e.status || 'Pending') === col.id).map(e => (
-                          <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {enquiries.map(e => <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} isList />)}
+                  {enquiries.map(e => <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} isList />)}
                 </div>
               )
             ) : (
@@ -357,6 +457,27 @@ export default function AdminPortal() {
                 </CardContent>
               </Card>
              </div>
+          </TabsContent>
+
+          <TabsContent value="deposits" className="animate-in fade-in space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-headline font-bold text-primary">Deposit Returns Due</h2>
+              {depositEnquiries.length > 0 && <Badge variant="secondary">{depositEnquiries.length} pending</Badge>}
+            </div>
+
+            {loadingEnquiries ? (
+              <div className="py-20 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto" /></div>
+            ) : depositEnquiries.length === 0 ? (
+              <div className="text-center py-20 bg-white rounded-3xl border border-dashed text-muted-foreground">
+                No completed hires awaiting deposit return.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {depositEnquiries.map(e => (
+                  <DepositRow key={e.id} enquiry={e} onSend={handleSendDepositReturn} />
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="faqs" className="animate-in fade-in">
@@ -443,11 +564,17 @@ export default function AdminPortal() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <EditEnquiryDialog
+        enquiry={editingEnquiry}
+        onOpenChange={(open) => { if (!open) setEditingEnquiry(null); }}
+        onSave={handleSaveEnquiry}
+      />
     </div>
   );
 }
 
-function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, onSendConfirmation, isList }: { enquiry: any, onUpdateStatus: (id: string, s: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, isList?: boolean }) {
+function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, onSendConfirmation, onEdit, isList }: { enquiry: any, onUpdateStatus: (id: string, s: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onEdit: (e: any) => void, isList?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isSendingConfirm, setIsSendingConfirm] = useState(false);
@@ -477,8 +604,11 @@ function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, onSendConfirmat
            <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon" className="h-6 w-6"><MoreVertical className="h-3 w-3" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent className="text-xs">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(enquiry); }}>
+                <Pencil className="h-3 w-3 mr-2" /> Edit Details
+              </DropdownMenuItem>
               {['Pending', 'Reviewed', 'Confirmed', 'Rejected'].map(s => (
-                <DropdownMenuItem key={s} onClick={(e) => { e.stopPropagation(); onUpdateStatus(enquiry.id, s); }}>Mark as {s}</DropdownMenuItem>
+                <DropdownMenuItem key={s} onClick={(e) => { e.stopPropagation(); onUpdateStatus(enquiry.id, s); }}>Mark as {STATUS_LABELS[s] ?? s}</DropdownMenuItem>
               ))}
             </DropdownMenuContent>
            </DropdownMenu>
@@ -637,5 +767,338 @@ function FAQAdminItem({
         </Button>
       </div>
     </div>
+  );
+}
+
+function formatSortCodeDisplay(sortCode?: string) {
+  if (!sortCode) return '—';
+  const digits = sortCode.replace(/\D/g, '');
+  if (digits.length !== 6) return sortCode;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 6)}`;
+}
+
+function DepositRow({
+  enquiry,
+  onSend,
+}: {
+  enquiry: any;
+  onSend: (enquiry: any, amount: number, isFullReturn: boolean, reason?: string) => Promise<boolean>;
+}) {
+  const [sendingFull, setSendingFull] = useState(false);
+  const [deductionOpen, setDeductionOpen] = useState(false);
+  const confirmation = enquiry.confirmation || {};
+  const fullDeposit = getDepositAmount(enquiry);
+  const previousReturn = enquiry.depositReturn as
+    | { amount: number; fullDeposit?: number; isFullReturn: boolean; sentAt: string; reason?: string | null }
+    | undefined;
+
+  const handleFullReturn = async () => {
+    setSendingFull(true);
+    await onSend(enquiry, fullDeposit, true);
+    setSendingFull(false);
+  };
+
+  return (
+    <Card className="border shadow-sm bg-white">
+      <CardContent className="p-5 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-primary text-base">{enquiry.name}</h3>
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+              <Calendar className="h-3 w-3" /> {enquiry.dateRequired} · {enquiry.startTime}–{enquiry.endTime}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">{enquiry.typeOfEvent}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Deposit</p>
+            <p className="text-lg font-bold text-primary">£{fullDeposit.toFixed(2)}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-muted/30 rounded-xl p-3 text-xs">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Account Name</p>
+            <p className="font-semibold">{confirmation.accountName || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Bank</p>
+            <p className="font-semibold">{confirmation.bankName || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Account Number</p>
+            <p className="font-mono">{confirmation.accountNumber || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Sort Code</p>
+            <p className="font-mono">{formatSortCodeDisplay(confirmation.sortCode)}</p>
+          </div>
+        </div>
+
+        {previousReturn && (
+          <div className="flex items-start gap-2 text-xs bg-green-50 border border-green-200 text-green-800 rounded-lg p-2.5">
+            <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">
+                {previousReturn.isFullReturn
+                  ? `Full deposit return (£${previousReturn.amount.toFixed(2)}) sent to Treasurer`
+                  : `Deduction return (£${previousReturn.amount.toFixed(2)} of £${previousReturn.fullDeposit?.toFixed?.(2) ?? fullDeposit.toFixed(2)}) sent to Treasurer`}
+              </p>
+              {previousReturn.reason && <p className="opacity-80 mt-0.5">Reason: {previousReturn.reason}</p>}
+              <p className="opacity-60 text-[10px] mt-0.5">{format(parseISO(previousReturn.sentAt), 'PPp')}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            className="flex-1 gap-2"
+            onClick={handleFullReturn}
+            disabled={sendingFull}
+          >
+            {sendingFull ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
+            Full Deposit Return
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1 gap-2"
+            onClick={() => setDeductionOpen(true)}
+          >
+            <MinusCircle className="h-4 w-4" />
+            Deduction
+          </Button>
+        </div>
+      </CardContent>
+
+      <DeductionDialog
+        open={deductionOpen}
+        onOpenChange={setDeductionOpen}
+        fullDeposit={fullDeposit}
+        hirerName={enquiry.name}
+        onSubmit={async (amount, reason) => {
+          const ok = await onSend(enquiry, amount, false, reason);
+          if (ok) setDeductionOpen(false);
+        }}
+      />
+    </Card>
+  );
+}
+
+function DeductionDialog({
+  open,
+  onOpenChange,
+  fullDeposit,
+  hirerName,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  fullDeposit: number;
+  hirerName: string;
+  onSubmit: (amount: number, reason: string) => Promise<void> | void;
+}) {
+  const [amount, setAmount] = useState<string>('');
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (open) {
+      setAmount('');
+      setReason('');
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  const handleSubmit = async () => {
+    const parsed = Number(amount);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      toast({ variant: 'destructive', title: 'Invalid amount', description: 'Enter a revised return amount of £0 or more.' });
+      return;
+    }
+    if (parsed > fullDeposit) {
+      toast({ variant: 'destructive', title: 'Amount too high', description: `The revised return cannot exceed the original deposit of £${fullDeposit.toFixed(2)}.` });
+      return;
+    }
+    if (!reason.trim()) {
+      toast({ variant: 'destructive', title: 'Reason required', description: 'Please provide a reason for the deduction.' });
+      return;
+    }
+    setSubmitting(true);
+    await onSubmit(parsed, reason.trim());
+    setSubmitting(false);
+  };
+
+  const deduction = Math.max(0, fullDeposit - Number(amount || 0));
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>Deposit Deduction</DialogTitle>
+          <DialogDescription>
+            Notify the Treasurer of a partial deposit return for <span className="font-semibold">{hirerName}</span>.
+            Original deposit: <span className="font-semibold">£{fullDeposit.toFixed(2)}</span>.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="deduction-amount">Revised return amount (£)</Label>
+            <Input
+              id="deduction-amount"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={fullDeposit}
+              step="0.01"
+              placeholder="e.g. 30.00"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+            />
+            {amount !== '' && Number.isFinite(Number(amount)) && (
+              <p className="text-xs text-muted-foreground">Deduction: £{deduction.toFixed(2)}</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="deduction-reason">Reason for deduction</Label>
+            <textarea
+              id="deduction-reason"
+              rows={3}
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder="e.g. Additional cleaning required (2 hours)"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={submitting} className="gap-2">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Send to Treasurer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const EDIT_FIELDS: Array<{ key: string; label: string; type?: 'text' | 'email' | 'tel' | 'date' | 'time' | 'number' | 'textarea' | 'select'; options?: string[] }> = [
+  { key: 'name', label: 'Hirer Name' },
+  { key: 'emailAddress', label: 'Email', type: 'email' },
+  { key: 'phoneNumber', label: 'Phone', type: 'tel' },
+  { key: 'preferredContact', label: 'Preferred Contact', type: 'select', options: ['Email', 'Phone'] },
+  { key: 'postalAddress', label: 'Postal Address' },
+  { key: 'postcode', label: 'Postcode' },
+  { key: 'typeOfEvent', label: 'Type of Event' },
+  { key: 'estimatedAttendance', label: 'Estimated Attendance', type: 'number' },
+  { key: 'dateRequired', label: 'Date Required', type: 'date' },
+  { key: 'startTime', label: 'Start Time', type: 'time' },
+  { key: 'endTime', label: 'End Time', type: 'time' },
+  { key: 'additionalRequirements', label: 'Additional Requirements', type: 'textarea' },
+];
+
+function EditEnquiryDialog({
+  enquiry,
+  onOpenChange,
+  onSave,
+}: {
+  enquiry: any | null;
+  onOpenChange: (open: boolean) => void;
+  onSave: (id: string, updates: Record<string, any>) => Promise<boolean>;
+}) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (enquiry) {
+      const next: Record<string, string> = {};
+      for (const f of EDIT_FIELDS) next[f.key] = enquiry[f.key] != null ? String(enquiry[f.key]) : '';
+      setValues(next);
+    }
+  }, [enquiry]);
+
+  if (!enquiry) return null;
+
+  const handleSubmit = async () => {
+    if (values.endTime && values.startTime && values.endTime <= values.startTime) {
+      toast({ variant: 'destructive', title: 'Invalid Times', description: 'End time must be after start time.' });
+      return;
+    }
+    setSaving(true);
+    const updates: Record<string, any> = {};
+    for (const f of EDIT_FIELDS) {
+      const v = values[f.key] ?? '';
+      updates[f.key] = f.type === 'number' ? (v === '' ? null : Number(v)) : v;
+    }
+    const ok = await onSave(enquiry.id, updates);
+    setSaving(false);
+    if (ok) onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={!!enquiry} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Booking Details</DialogTitle>
+          <DialogDescription>
+            Update the contact information, date, time, or other details for this enquiry.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {EDIT_FIELDS.map(f => {
+              const id = `edit-${f.key}`;
+              const value = values[f.key] ?? '';
+              const onChange = (v: string) => setValues(prev => ({ ...prev, [f.key]: v }));
+              const fullWidth = f.type === 'textarea' || f.key === 'postalAddress';
+              return (
+                <div key={f.key} className={cn('space-y-1.5', fullWidth && 'sm:col-span-2')}>
+                  <Label htmlFor={id}>{f.label}</Label>
+                  {f.type === 'textarea' ? (
+                    <textarea
+                      id={id}
+                      rows={3}
+                      value={value}
+                      onChange={e => onChange(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    />
+                  ) : f.type === 'select' ? (
+                    <select
+                      id={id}
+                      value={value}
+                      onChange={e => onChange(e.target.value)}
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      <option value="">Select…</option>
+                      {f.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                  ) : (
+                    <Input
+                      id={id}
+                      type={f.type ?? 'text'}
+                      value={value}
+                      onChange={e => onChange(e.target.value)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={saving} className="gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
