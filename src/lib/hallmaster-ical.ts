@@ -5,9 +5,11 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 
 let cachedFeed: { data: Record<string, ical.CalendarComponent>; fetchedAt: number } | null = null;
 
-export async function getHallmasterEvents(): Promise<Record<string, ical.CalendarComponent>> {
+export async function getHallmasterEvents(
+  options: { force?: boolean } = {},
+): Promise<Record<string, ical.CalendarComponent>> {
   const now = Date.now();
-  if (cachedFeed && now - cachedFeed.fetchedAt < CACHE_TTL_MS) {
+  if (!options.force && cachedFeed && now - cachedFeed.fetchedAt < CACHE_TTL_MS) {
     return cachedFeed.data;
   }
   const data = await ical.async.fromURL(ICAL_URL);

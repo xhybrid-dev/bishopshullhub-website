@@ -19,9 +19,9 @@ export type LiveEvent = {
  * Returns a window of events to support week/month navigation
  * (2 weeks back, 12 months forward).
  */
-export async function getLiveCalendarEventsAction() {
+export async function getLiveCalendarEventsAction(options: { force?: boolean } = {}) {
   try {
-    const events = await getHallmasterEvents();
+    const events = await getHallmasterEvents({ force: options.force });
 
     const now = new Date();
     const rangeStart = subDays(startOfWeek(now, { weekStartsOn: 1 }), 14);

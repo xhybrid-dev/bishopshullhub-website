@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, LayoutDashboard, LogOut, Inbox, User, Mail, Phone, Clock, Calendar, CalendarDays, ShieldAlert, Key, LogIn, FileText, CheckCircle2, MoreVertical, ArrowRight, XCircle, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, UserPlus, Trash2, Send, AlertCircle, AlertTriangle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle } from 'lucide-react';
+import { Loader2, LayoutDashboard, LogOut, Inbox, User, Mail, Phone, Clock, Calendar, CalendarDays, ShieldAlert, Key, LogIn, FileText, CheckCircle2, MoreVertical, ArrowRight, XCircle, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, UserPlus, Trash2, Send, AlertCircle, AlertTriangle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle, RefreshCw } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, useDoc, setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, orderBy, updateDoc, onSnapshot } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
@@ -157,6 +157,17 @@ export default function AdminPortal() {
 
   // Pull the live Hallmaster feed once admin access is confirmed,
   // so we can overlay it on the calendar and detect clashes against enquiries.
+  // Pass force=true to bypass the 5-minute server cache (used by the manual re-sync button).
+  const refreshLiveEvents = async (force = false) => {
+    setIsLiveLoading(true);
+    const result = await getLiveCalendarEventsAction({ force });
+    if (result.success && result.events) {
+      setLiveEvents(result.events);
+    }
+    setIsLiveLoading(false);
+    return result;
+  };
+
   useEffect(() => {
     if (!hasAdminAccess) return;
     let cancelled = false;
@@ -170,6 +181,15 @@ export default function AdminPortal() {
     });
     return () => { cancelled = true; };
   }, [hasAdminAccess]);
+
+  const handleResyncLive = async () => {
+    const result = await refreshLiveEvents(true);
+    if (result.success) {
+      toast({ title: 'Live calendar synced', description: `Pulled ${result.events?.length ?? 0} event${(result.events?.length ?? 0) === 1 ? '' : 's'} from Hallmaster.` });
+    } else {
+      toast({ variant: 'destructive', title: 'Sync Failed', description: result.error || 'Could not reach the Hallmaster feed.' });
+    }
+  };
 
   // Enquiries that haven't yet been moved into Hallmaster — i.e. everything
   // except the "Hire Complete" column. These are the bookings the manager
@@ -435,10 +455,23 @@ export default function AdminPortal() {
           <TabsContent value="enquiries" className="space-y-8 animate-in fade-in">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-headline font-bold text-primary">Workflow Management</h2>
-              <div className="bg-white rounded-lg p-1 border shadow-sm flex items-center flex-wrap">
-                <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('kanban')}><LayoutGrid className="h-4 w-4 mr-2" /> Kanban</Button>
-                <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('list')}><List className="h-4 w-4 mr-2" /> List</Button>
-                <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('calendar')}><CalendarDays className="h-4 w-4 mr-2" /> Calendar</Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResyncLive}
+                  disabled={isLiveLoading}
+                  className="gap-2"
+                  title="Re-fetch the live Hallmaster feed (bypasses 5-min cache)"
+                >
+                  <RefreshCw className={cn('h-4 w-4', isLiveLoading && 'animate-spin')} />
+                  {isLiveLoading ? 'Syncing…' : 'Re-sync'}
+                </Button>
+                <div className="bg-white rounded-lg p-1 border shadow-sm flex items-center flex-wrap">
+                  <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('kanban')}><LayoutGrid className="h-4 w-4 mr-2" /> Kanban</Button>
+                  <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('list')}><List className="h-4 w-4 mr-2" /> List</Button>
+                  <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('calendar')}><CalendarDays className="h-4 w-4 mr-2" /> Calendar</Button>
+                </div>
               </div>
             </div>
 
