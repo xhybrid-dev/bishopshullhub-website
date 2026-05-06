@@ -1,23 +1,7 @@
 'use server';
 
-import ical from 'node-ical';
 import { isSameDay } from 'date-fns';
-
-const ICAL_URL = 'https://v2.hallmaster.co.uk/api/ical/GetICalStream?HallId=10228';
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-// Module-level cache — persists across requests on the same server instance
-let cachedFeed: { data: Record<string, ical.CalendarComponent>; fetchedAt: number } | null = null;
-
-async function getICalEvents(): Promise<Record<string, ical.CalendarComponent>> {
-  const now = Date.now();
-  if (cachedFeed && now - cachedFeed.fetchedAt < CACHE_TTL_MS) {
-    return cachedFeed.data;
-  }
-  const data = await ical.async.fromURL(ICAL_URL);
-  cachedFeed = { data, fetchedAt: now };
-  return data;
-}
+import { getHallmasterEvents } from '@/lib/hallmaster-ical';
 
 export type ClashingEvent = {
   summary: string;
@@ -36,7 +20,7 @@ export type AvailabilityResult =
  */
 export async function prefetchAvailabilityCache(): Promise<void> {
   try {
-    await getICalEvents();
+    await getHallmasterEvents();
   } catch {
     // Silently ignore — the real check will handle any error
   }
@@ -57,7 +41,7 @@ export async function checkAvailabilityAction(
     const requestedStart = new Date(`${date}T${startTime}:00`);
     const requestedEnd   = new Date(`${date}T${endTime}:00`);
 
-    const events = await getICalEvents();
+    const events = await getHallmasterEvents();
 
     const clashes: ClashingEvent[] = [];
 
@@ -67,10 +51,8 @@ export async function checkAvailabilityAction(
       const eventStart = new Date(event.start);
       const eventEnd   = new Date(event.end);
 
-      // Only consider events on the same day
       if (!isSameDay(eventStart, requestedStart)) return;
 
-      // Standard interval-overlap test
       if (requestedStart < eventEnd && requestedEnd > eventStart) {
         clashes.push({
           summary: event.summary || 'Existing booking',

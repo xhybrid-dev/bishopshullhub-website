@@ -1,8 +1,8 @@
 
 'use server';
 
-import ical from 'node-ical';
-import { startOfWeek, endOfWeek, isWithinInterval, addDays, subDays, addMonths, format } from 'date-fns';
+import { startOfWeek, isWithinInterval, subDays, addMonths, format } from 'date-fns';
+import { getHallmasterEvents } from '@/lib/hallmaster-ical';
 
 export type LiveEvent = {
   id: string;
@@ -14,36 +14,31 @@ export type LiveEvent = {
   dayOfWeek: string;
 };
 
-const ICAL_URL = 'https://v2.hallmaster.co.uk/api/ical/GetICalStream?HallId=10228';
-
 /**
  * Fetches and parses the Hallmaster iCal stream.
- * Returns a window of events to support the week-by-week navigation.
+ * Returns a window of events to support week/month navigation
+ * (2 weeks back, 12 months forward).
  */
 export async function getLiveCalendarEventsAction() {
   try {
-    const events = await ical.async.fromURL(ICAL_URL);
-    
+    const events = await getHallmasterEvents();
+
     const now = new Date();
-    // Fetch a wider range to support navigation (2 weeks back, 6 months forward)
     const rangeStart = subDays(startOfWeek(now, { weekStartsOn: 1 }), 14);
-    const rangeEnd = addMonths(now, 6);
+    const rangeEnd = addMonths(now, 12);
 
     const processedEvents: LiveEvent[] = [];
 
     Object.values(events).forEach((event) => {
       if (event.type === 'VEVENT') {
         const start = new Date(event.start);
-        
-        // Only include events within our navigation window
+
         if (isWithinInterval(start, { start: rangeStart, end: rangeEnd })) {
-          // Clean descriptions: Remove Hallmaster booking links and redundant URLs
           const rawDescription = event.description || '';
-          
-          // Pattern to match Hallmaster booking links and general URLs
+
           const cleanedDescription = rawDescription
             .replace(/https:\/\/v2\.hallmaster\.co\.uk\/Scheduler\/ViewBooking\/\S+/g, '')
-            .replace(/http[s]?:\/\/\S+/g, '') // Remove any other links
+            .replace(/http[s]?:\/\/\S+/g, '')
             .trim();
 
           processedEvents.push({
@@ -59,7 +54,6 @@ export async function getLiveCalendarEventsAction() {
       }
     });
 
-    // Sort by start time
     return {
       success: true,
       events: processedEvents.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())

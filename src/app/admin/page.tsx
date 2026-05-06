@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, LayoutDashboard, LogOut, Inbox, User, Mail, Phone, Clock, Calendar, ShieldAlert, Key, LogIn, FileText, CheckCircle2, MoreVertical, ArrowRight, XCircle, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, UserPlus, Trash2, Send, AlertCircle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle } from 'lucide-react';
+import { Loader2, LayoutDashboard, LogOut, Inbox, User, Mail, Phone, Clock, Calendar, CalendarDays, ShieldAlert, Key, LogIn, FileText, CheckCircle2, MoreVertical, ArrowRight, XCircle, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, UserPlus, Trash2, Send, AlertCircle, AlertTriangle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, useDoc, setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, orderBy, updateDoc, onSnapshot } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
@@ -17,8 +17,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { sendSecurityReviewEmailAction, sendHireConfirmationInviteAction, sendDepositReturnEmailAction } from '@/app/actions/send-email';
+import { getLiveCalendarEventsAction, type LiveEvent } from '@/app/actions/get-calendar';
+import type { ClashingEvent } from '@/app/actions/check-availability';
+import { EnquiryCalendarView } from '@/components/admin/EnquiryCalendarView';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { format, isWithinInterval, addDays, startOfToday, parseISO } from 'date-fns';
+import { format, isWithinInterval, addDays, startOfToday, parseISO, isSameDay } from 'date-fns';
 
 const STATUS_COLUMNS = [
   { id: 'Pending', label: 'Enquiry Received', color: 'bg-amber-500', icon: Clock3 },
@@ -72,7 +75,9 @@ const DEFAULT_FAQS = [
 export default function AdminPortal() {
   const { toast } = useToast();
   const { firestore, auth, user, isUserLoading } = useFirebase();
-  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'calendar'>('kanban');
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  const [isLiveLoading, setIsLiveLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('enquiries');
   
   const adminDocRef = useMemoFirebase(() => {
@@ -149,6 +154,68 @@ export default function AdminPortal() {
       }
     }).sort((a, b) => a.dateRequired.localeCompare(b.dateRequired));
   }, [enquiries]);
+
+  // Pull the live Hallmaster feed once admin access is confirmed,
+  // so we can overlay it on the calendar and detect clashes against enquiries.
+  useEffect(() => {
+    if (!hasAdminAccess) return;
+    let cancelled = false;
+    setIsLiveLoading(true);
+    getLiveCalendarEventsAction().then(result => {
+      if (cancelled) return;
+      if (result.success && result.events) {
+        setLiveEvents(result.events);
+      }
+      setIsLiveLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [hasAdminAccess]);
+
+  // Enquiries that haven't yet been moved into Hallmaster — i.e. everything
+  // except the "Hire Complete" column. These are the bookings the manager
+  // still needs to track for clashes.
+  const activeEnquiries = useMemo(() => {
+    if (!enquiries) return [];
+    const today = startOfToday();
+    return enquiries.filter(e => {
+      const status = e.status || 'Pending';
+      const hirerConfirmed = e.confirmationStatus === 'Submitted';
+      let isPast = false;
+      try { isPast = parseISO(e.dateRequired) < today; } catch {}
+      // Hide HireComplete (logged in Hallmaster already)
+      if (hirerConfirmed && isPast) return false;
+      if (status === 'Confirmed' && isPast) return false;
+      if (status === 'Rejected') return false;
+      return true;
+    });
+  }, [enquiries]);
+
+  // Build a clash map: { enquiryId: ClashingEvent[] } using the same overlap
+  // rule as check-availability (requestedStart < eventEnd && requestedEnd > eventStart).
+  const clashMap = useMemo(() => {
+    const map: Record<string, ClashingEvent[]> = {};
+    if (liveEvents.length === 0) return map;
+    activeEnquiries.forEach(e => {
+      if (!e.dateRequired || !e.startTime || !e.endTime) return;
+      let reqStart: Date, reqEnd: Date;
+      try {
+        reqStart = new Date(`${e.dateRequired}T${e.startTime}:00`);
+        reqEnd = new Date(`${e.dateRequired}T${e.endTime}:00`);
+      } catch { return; }
+      if (isNaN(reqStart.getTime()) || isNaN(reqEnd.getTime())) return;
+      const clashes: ClashingEvent[] = [];
+      liveEvents.forEach(ev => {
+        const evStart = parseISO(ev.start);
+        const evEnd = parseISO(ev.end);
+        if (!isSameDay(evStart, reqStart)) return;
+        if (reqStart < evEnd && reqEnd > evStart) {
+          clashes.push({ summary: ev.summary, start: ev.start, end: ev.end });
+        }
+      });
+      if (clashes.length > 0) map[e.id] = clashes;
+    });
+    return map;
+  }, [activeEnquiries, liveEvents]);
 
   const [editingEnquiry, setEditingEnquiry] = useState<any | null>(null);
 
@@ -368,14 +435,23 @@ export default function AdminPortal() {
           <TabsContent value="enquiries" className="space-y-8 animate-in fade-in">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-headline font-bold text-primary">Workflow Management</h2>
-              <div className="bg-white rounded-lg p-1 border shadow-sm flex items-center">
+              <div className="bg-white rounded-lg p-1 border shadow-sm flex items-center flex-wrap">
                 <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('kanban')}><LayoutGrid className="h-4 w-4 mr-2" /> Kanban</Button>
                 <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('list')}><List className="h-4 w-4 mr-2" /> List</Button>
+                <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('calendar')}><CalendarDays className="h-4 w-4 mr-2" /> Calendar</Button>
               </div>
             </div>
 
             {loadingEnquiries ? (
               <div className="py-20 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto" /></div>
+            ) : viewMode === 'calendar' ? (
+              <EnquiryCalendarView
+                enquiries={activeEnquiries}
+                liveEvents={liveEvents}
+                clashMap={clashMap}
+                isLiveLoading={isLiveLoading}
+                onEditEnquiry={setEditingEnquiry}
+              />
             ) : enquiries && enquiries.length > 0 ? (
               viewMode === 'kanban' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
@@ -406,7 +482,7 @@ export default function AdminPortal() {
                         </div>
                         <div className="flex flex-col gap-4 bg-muted/20 p-3 rounded-2xl min-h-[400px] border-2 border-dashed border-muted">
                           {items.map(e => (
-                            <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} />
+                            <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} />
                           ))}
                         </div>
                       </div>
@@ -415,7 +491,7 @@ export default function AdminPortal() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {enquiries.map(e => <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} isList />)}
+                  {enquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} isList />)}
                 </div>
               )
             ) : (
@@ -574,10 +650,11 @@ export default function AdminPortal() {
   );
 }
 
-function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, onSendConfirmation, onEdit, isList }: { enquiry: any, onUpdateStatus: (id: string, s: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onEdit: (e: any) => void, isList?: boolean }) {
+function KanbanCard({ enquiry, clashes, onUpdateStatus, onSendToSecurity, onSendConfirmation, onEdit, isList }: { enquiry: any, clashes?: ClashingEvent[], onUpdateStatus: (id: string, s: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onEdit: (e: any) => void, isList?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isSendingConfirm, setIsSendingConfirm] = useState(false);
+  const hasClash = (clashes?.length ?? 0) > 0;
 
   const handleReviewClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -597,8 +674,21 @@ function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, onSendConfirmat
   const showConfirmButton = enquiry.status === 'Reviewed' || enquiry.status === 'Confirmed';
 
   return (
-    <Card className={cn("border shadow-sm hover:shadow-md transition-all bg-white cursor-pointer overflow-hidden", isExpanded && "ring-2 ring-primary")} onClick={() => setIsExpanded(!isExpanded)}>
+    <Card className={cn("border shadow-sm hover:shadow-md transition-all bg-white cursor-pointer overflow-hidden", isExpanded && "ring-2 ring-primary", hasClash && "border-red-400 bg-red-50/40")} onClick={() => setIsExpanded(!isExpanded)}>
       <div className="p-4 space-y-3">
+        {hasClash && (
+          <div className="flex items-start gap-1.5 text-[10px] font-bold text-red-700 bg-red-100 border border-red-200 rounded-md px-2 py-1.5">
+            <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p>Clashes with live booking{(clashes?.length ?? 0) > 1 ? 's' : ''}</p>
+              {isExpanded && clashes!.map((c, i) => (
+                <p key={i} className="font-normal opacity-90 mt-0.5">
+                  • {c.summary} ({format(parseISO(c.start), 'HH:mm')}–{format(parseISO(c.end), 'HH:mm')})
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex justify-between items-start">
            <Badge variant="outline" className="text-[10px] font-mono">{enquiry.id.substring(0, 6)}</Badge>
            <DropdownMenu>
