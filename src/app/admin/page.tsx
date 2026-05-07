@@ -81,7 +81,8 @@ export default function AdminPortal() {
   const [activeTab, setActiveTab] = useState('enquiries');
   
   const adminDocRef = useMemoFirebase(() => {
-    return user && !user.isAnonymous ? doc(firestore, 'admins', user.uid) : null;
+    if (!user || user.isAnonymous || !user.email) return null;
+    return doc(firestore, 'admins', user.email.toLowerCase());
   }, [firestore, user]);
   
   const { data: adminRecord, isLoading: checkingAdmin } = useDoc(adminDocRef);
@@ -104,6 +105,13 @@ export default function AdminPortal() {
   }, [firestore, hasAdminAccess]);
 
   const { data: securityContacts, isLoading: loadingSecurity } = useCollection(securityQuery);
+
+  const adminsQuery = useMemoFirebase(() => {
+    if (!hasAdminAccess) return null;
+    return query(collection(firestore, 'admins'), orderBy('addedAt', 'desc'));
+  }, [firestore, hasAdminAccess]);
+
+  const { data: adminUsers, isLoading: loadingAdmins } = useCollection(adminsQuery);
 
   const [faqItems,    setFaqItems]    = useState<any[] | null>(null);
   const [loadingFaqs, setLoadingFaqs] = useState(false);
@@ -396,8 +404,8 @@ export default function AdminPortal() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 pb-20">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-muted/30 pb-20 overflow-x-clip">
+      <div className="container mx-auto px-4 py-8 max-w-full">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary text-primary-foreground rounded-lg shadow-lg"><LayoutDashboard className="h-6 w-6" /></div>
@@ -437,23 +445,25 @@ export default function AdminPortal() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="bg-white border p-1 rounded-2xl h-14 shadow-sm w-fit">
-            <TabsTrigger value="enquiries" className="rounded-xl px-6 h-full data-[state=active]:bg-primary data-[state=active]:text-white">
-              <Inbox className="h-4 w-4 mr-2" /> Booking Enquiries
-            </TabsTrigger>
-            <TabsTrigger value="security" className="rounded-xl px-6 h-full data-[state=active]:bg-primary data-[state=active]:text-white">
-              <ShieldCheck className="h-4 w-4 mr-2" /> Security Team
-            </TabsTrigger>
-            <TabsTrigger value="deposits" className="rounded-xl px-6 h-full data-[state=active]:bg-primary data-[state=active]:text-white">
-              <Banknote className="h-4 w-4 mr-2" /> Deposit Details
-            </TabsTrigger>
-            <TabsTrigger value="faqs" className="rounded-xl px-6 h-full data-[state=active]:bg-primary data-[state=active]:text-white">
-              <HelpCircle className="h-4 w-4 mr-2" /> FAQs
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+            <TabsList className="bg-white border p-1 rounded-2xl h-14 shadow-sm w-max">
+              <TabsTrigger value="enquiries" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
+                <Inbox className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Booking Enquiries</span>
+              </TabsTrigger>
+              <TabsTrigger value="security" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
+                <Users className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Users</span>
+              </TabsTrigger>
+              <TabsTrigger value="deposits" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
+                <Banknote className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Deposit Details</span>
+              </TabsTrigger>
+              <TabsTrigger value="faqs" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
+                <HelpCircle className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">FAQs</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="enquiries" className="space-y-8 animate-in fade-in">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
               <h2 className="text-xl font-headline font-bold text-primary">Workflow Management</h2>
               <div className="flex items-center gap-2 flex-wrap">
                 <Button
@@ -461,16 +471,16 @@ export default function AdminPortal() {
                   size="sm"
                   onClick={handleResyncLive}
                   disabled={isLiveLoading}
-                  className="gap-2"
+                  className="gap-2 shrink-0"
                   title="Re-fetch the live Hallmaster feed (bypasses 5-min cache)"
                 >
                   <RefreshCw className={cn('h-4 w-4', isLiveLoading && 'animate-spin')} />
                   {isLiveLoading ? 'Syncing…' : 'Re-sync'}
                 </Button>
-                <div className="bg-white rounded-lg p-1 border shadow-sm flex items-center flex-wrap">
-                  <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('kanban')}><LayoutGrid className="h-4 w-4 mr-2" /> Kanban</Button>
-                  <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('list')}><List className="h-4 w-4 mr-2" /> List</Button>
-                  <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('calendar')}><CalendarDays className="h-4 w-4 mr-2" /> Calendar</Button>
+                <div className="bg-white rounded-lg p-1 border shadow-sm flex items-center">
+                  <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="sm" className="px-2 sm:px-3" onClick={() => setViewMode('kanban')}><LayoutGrid className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Kanban</span></Button>
+                  <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="px-2 sm:px-3" onClick={() => setViewMode('list')}><List className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">List</span></Button>
+                  <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" className="px-2 sm:px-3" onClick={() => setViewMode('calendar')}><CalendarDays className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Calendar</span></Button>
                 </div>
               </div>
             </div>
@@ -535,36 +545,138 @@ export default function AdminPortal() {
           <TabsContent value="security" className="animate-in fade-in">
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <Card className="border-none shadow-xl bg-white">
-                <CardHeader><CardTitle className="text-primary">Add Contact</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle className="text-primary">Add User</CardTitle>
+                  <CardDescription>
+                    Pre-authorise an email so the user can activate their account on the login page.
+                  </CardDescription>
+                </CardHeader>
                 <CardContent>
-                   <form onSubmit={(e) => {
+                  <form onSubmit={(e) => {
                     e.preventDefault();
                     const fd = new FormData(e.currentTarget);
-                    const name = fd.get('name') as string;
-                    const email = fd.get('email') as string;
-                    const contactId = Math.random().toString(36).substring(7);
-                    setDocumentNonBlocking(doc(firestore, 'security_team', contactId), { id: contactId, name, email, addedAt: new Date().toISOString() }, {});
+                    const name = (fd.get('name') as string).trim();
+                    const email = (fd.get('email') as string).trim().toLowerCase();
+                    const role = fd.get('role') as 'admin' | 'security';
+                    if (!email || !name) return;
+
+                    const collectionName = role === 'admin' ? 'admins' : 'security_team';
+                    setDocumentNonBlocking(
+                      doc(firestore, collectionName, email),
+                      {
+                        id: email,
+                        name,
+                        email,
+                        role,
+                        addedAt: new Date().toISOString(),
+                        addedBy: user?.email ?? null,
+                      },
+                      {},
+                    );
                     (e.target as HTMLFormElement).reset();
-                    toast({ title: "Contact Added" });
+                    toast({
+                      title: role === 'admin' ? 'Admin User Added' : 'Security Contact Added',
+                      description: `${name} can now activate their account on the login page.`,
+                    });
                   }} className="space-y-4">
-                    <Input name="name" placeholder="Name" required />
-                    <Input name="email" type="email" placeholder="Email" required />
-                    <Button type="submit" className="w-full">Add to Team</Button>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="user-name">Name</Label>
+                      <Input id="user-name" name="name" placeholder="Full name" required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="user-email">Email</Label>
+                      <Input id="user-email" name="email" type="email" placeholder="user@example.com" required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="user-role">Role</Label>
+                      <select
+                        id="user-role"
+                        name="role"
+                        defaultValue="security"
+                        className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <option value="security">Security Team — receives review emails</option>
+                        <option value="admin">Admin — full access to this portal</option>
+                      </select>
+                    </div>
+                    <Button type="submit" className="w-full">Add User</Button>
                   </form>
                 </CardContent>
               </Card>
 
-              <Card className="border-none shadow-xl bg-white">
-                <CardHeader><CardTitle className="text-primary">Current Team</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
-                  {securityContacts?.map(c => (
-                    <div key={c.id} className="flex justify-between items-center p-4 bg-muted/30 rounded-xl">
-                      <div><p className="font-bold">{c.name}</p><p className="text-xs opacity-60">{c.email}</p></div>
-                      <Button variant="ghost" size="icon" onClick={() => deleteDocumentNonBlocking(doc(firestore, 'security_team', c.id))} className="text-red-500"><Trash2 className="h-4 w-4" /></Button>
+              <div className="space-y-6">
+                <Card className="border-none shadow-xl bg-white">
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-primary flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4" /> Admin Users
+                      </CardTitle>
+                      <Badge variant="secondary">{adminUsers?.length ?? 0}</Badge>
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {loadingAdmins ? (
+                      <div className="py-6 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+                    ) : (adminUsers?.length ?? 0) === 0 ? (
+                      <p className="text-xs text-muted-foreground italic py-2">No admin users yet.</p>
+                    ) : (
+                      adminUsers!.map(a => (
+                        <div key={a.id} className="flex justify-between items-center gap-3 p-3 bg-muted/30 rounded-xl min-w-0">
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm break-words">{a.name || a.email}</p>
+                            <p className="text-xs opacity-60 break-words">{a.email}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={a.email === PRIMARY_ADMIN_EMAIL || a.email === user?.email}
+                            title={a.email === PRIMARY_ADMIN_EMAIL ? 'Cannot remove the primary admin' : a.email === user?.email ? "Can't remove yourself" : 'Remove admin'}
+                            onClick={() => deleteDocumentNonBlocking(doc(firestore, 'admins', a.id))}
+                            className="text-red-500 shrink-0"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-xl bg-white">
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-primary flex items-center gap-2">
+                        <Users className="h-4 w-4" /> Security Team
+                      </CardTitle>
+                      <Badge variant="secondary">{securityContacts?.length ?? 0}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {loadingSecurity ? (
+                      <div className="py-6 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+                    ) : (securityContacts?.length ?? 0) === 0 ? (
+                      <p className="text-xs text-muted-foreground italic py-2">No security contacts yet.</p>
+                    ) : (
+                      securityContacts!.map(c => (
+                        <div key={c.id} className="flex justify-between items-center gap-3 p-3 bg-muted/30 rounded-xl min-w-0">
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm break-words">{c.name}</p>
+                            <p className="text-xs opacity-60 break-words">{c.email}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteDocumentNonBlocking(doc(firestore, 'security_team', c.id))}
+                            className="text-red-500 shrink-0"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
              </div>
           </TabsContent>
 
@@ -712,10 +824,10 @@ function KanbanCard({ enquiry, clashes, onUpdateStatus, onSendToSecurity, onSend
         {hasClash && (
           <div className="flex items-start gap-1.5 text-[10px] font-bold text-red-700 bg-red-100 border border-red-200 rounded-md px-2 py-1.5">
             <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p>Clashes with live booking{(clashes?.length ?? 0) > 1 ? 's' : ''}</p>
               {isExpanded && clashes!.map((c, i) => (
-                <p key={i} className="font-normal opacity-90 mt-0.5">
+                <p key={i} className="font-normal opacity-90 mt-0.5 break-words">
                   • {c.summary} ({format(parseISO(c.start), 'HH:mm')}–{format(parseISO(c.end), 'HH:mm')})
                 </p>
               ))}

@@ -104,26 +104,28 @@ export function EnquiryCalendarView({
   const selectedDayLive = liveByDay.get(selectedKey) ?? [];
 
   return (
-    <div className="space-y-6">
-      {/* Month nav */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-2xl border shadow-sm">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={goPrev} aria-label="Previous month">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={goToday}>Today</Button>
-          <Button variant="outline" size="icon" onClick={goNext} aria-label="Next month">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-        <h3 className="text-lg md:text-xl font-headline font-bold text-primary">
-          {format(referenceDate, 'MMMM yyyy')}
-        </h3>
-        <div className="hidden md:flex items-center gap-3 text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> Enquiry</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500" /> Visit Done</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500" /> Confirmed</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-400" /> Hallmaster</span>
+    <div className="space-y-6 w-full min-w-0">
+      {/* Month nav — on mobile: title above controls; on desktop: nav | title | legend */}
+      <div className="bg-white p-3 md:p-4 rounded-2xl border shadow-sm">
+        <div className="flex flex-col-reverse md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex items-center justify-center md:justify-start gap-2 shrink-0">
+            <Button variant="outline" size="icon" onClick={goPrev} aria-label="Previous month">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={goToday}>Today</Button>
+            <Button variant="outline" size="icon" onClick={goNext} aria-label="Next month">
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <h3 className="text-base md:text-xl font-headline font-bold text-primary text-center md:text-left truncate">
+            {format(referenceDate, 'MMMM yyyy')}
+          </h3>
+          <div className="hidden md:flex items-center gap-3 text-[10px] text-muted-foreground shrink-0">
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> Enquiry</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500" /> Visit Done</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500" /> Confirmed</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-400" /> Hallmaster</span>
+          </div>
         </div>
       </div>
 
@@ -153,6 +155,7 @@ export function EnquiryCalendarView({
               onClick={() => setSelectedDate(day)}
               className={cn(
                 'relative bg-white rounded-lg md:rounded-xl border text-left transition-all',
+                'min-w-0 overflow-hidden',
                 'min-h-[64px] md:min-h-[120px] p-1.5 md:p-2',
                 'flex flex-col gap-1',
                 inMonth ? 'border-border' : 'border-transparent bg-muted/30 opacity-60',
@@ -223,18 +226,18 @@ export function EnquiryCalendarView({
       </div>
 
       {/* Selected day schedule */}
-      <div className="bg-white rounded-2xl border shadow-sm p-4 md:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
+      <div className="bg-white rounded-2xl border shadow-sm p-4 md:p-6 min-w-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div className="min-w-0">
             <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
               {format(selectedDate, 'EEEE')}
             </h4>
-            <p className="text-xl md:text-2xl font-headline font-bold text-primary">
+            <p className="text-lg md:text-2xl font-headline font-bold text-primary break-words">
               {format(selectedDate, 'do MMMM yyyy')}
             </p>
           </div>
           {isLiveLoading && (
-            <Badge variant="outline" className="text-[10px]">Syncing live feed…</Badge>
+            <Badge variant="outline" className="text-[10px] shrink-0">Syncing live feed…</Badge>
           )}
         </div>
 
@@ -277,29 +280,29 @@ function LiveEventPill({ event }: { event: LiveEvent }) {
           {format(parseISO(event.start), 'HH:mm')} {event.summary}
         </span>
       </PopoverTrigger>
-      <PopoverContent className="w-72 text-xs" onClick={(e) => e.stopPropagation()}>
-        <div className="space-y-2">
-          <div className="flex items-start gap-2">
+      <PopoverContent className="w-72 max-w-[calc(100vw-2rem)] text-xs" onClick={(e) => e.stopPropagation()}>
+        <div className="space-y-2 min-w-0">
+          <div className="flex items-start gap-2 min-w-0">
             <Info className="h-3.5 w-3.5 text-slate-500 mt-0.5 shrink-0" />
-            <div>
-              <p className="font-bold text-primary">{event.summary}</p>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-primary break-words">{event.summary}</p>
               <p className="text-muted-foreground">From Hallmaster</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+            <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span>
               {format(parseISO(event.start), 'HH:mm')} – {format(parseISO(event.end), 'HH:mm')}
             </span>
           </div>
           {event.location && (
-            <div className="flex items-center gap-2">
-              <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{event.location}</span>
+            <div className="flex items-start gap-2 min-w-0">
+              <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+              <span className="break-words min-w-0">{event.location}</span>
             </div>
           )}
           {event.description && (
-            <p className="text-muted-foreground italic pt-2 border-t">{event.description}</p>
+            <p className="text-muted-foreground italic pt-2 border-t break-words">{event.description}</p>
           )}
         </div>
       </PopoverContent>
@@ -332,23 +335,23 @@ function EnquirySchedRow({
       <div className={cn('w-1 self-stretch rounded-full shrink-0', dotColor)} />
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-bold text-primary text-sm">{enquiry.name}</span>
-          <Badge variant="outline" className="text-[9px] uppercase tracking-wider">{statusLabel}</Badge>
+          <span className="font-bold text-primary text-sm break-words min-w-0">{enquiry.name}</span>
+          <Badge variant="outline" className="text-[9px] uppercase tracking-wider shrink-0">{statusLabel}</Badge>
           {hasClash && (
-            <Badge className="text-[9px] uppercase tracking-wider bg-red-600 hover:bg-red-600">
+            <Badge className="text-[9px] uppercase tracking-wider bg-red-600 hover:bg-red-600 shrink-0">
               <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Clash
             </Badge>
           )}
         </div>
-        <p className="text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
-          <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {enquiry.startTime}–{enquiry.endTime}</span>
-          <span>{enquiry.typeOfEvent}</span>
+        <p className="text-xs text-muted-foreground flex items-center gap-x-3 gap-y-1 flex-wrap">
+          <span className="flex items-center gap-1 shrink-0"><Clock className="h-3 w-3" /> {enquiry.startTime}–{enquiry.endTime}</span>
+          <span className="break-words min-w-0">{enquiry.typeOfEvent}</span>
         </p>
         {hasClash && (
           <div className="mt-2 text-[11px] bg-white rounded-md p-2 border border-red-200 space-y-1">
             <p className="font-bold text-red-700">Clashes with live booking{clashes.length > 1 ? 's' : ''}:</p>
             {clashes.map((c, i) => (
-              <p key={i} className="text-red-700">
+              <p key={i} className="text-red-700 break-words">
                 • {c.summary} ({format(parseISO(c.start), 'HH:mm')}–{format(parseISO(c.end), 'HH:mm')})
               </p>
             ))}
@@ -361,24 +364,24 @@ function EnquirySchedRow({
 
 function LiveSchedRow({ event }: { event: LiveEvent }) {
   return (
-    <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+    <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 min-w-0">
       <div className="w-1 self-stretch rounded-full shrink-0 bg-slate-400" />
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-bold text-primary text-sm">{event.summary}</span>
-          <Badge variant="outline" className="text-[9px] uppercase tracking-wider">Hallmaster</Badge>
+          <span className="font-bold text-primary text-sm break-words min-w-0">{event.summary}</span>
+          <Badge variant="outline" className="text-[9px] uppercase tracking-wider shrink-0">Hallmaster</Badge>
         </div>
-        <p className="text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
-          <span className="flex items-center gap-1">
+        <p className="text-xs text-muted-foreground flex items-center gap-x-3 gap-y-1 flex-wrap">
+          <span className="flex items-center gap-1 shrink-0">
             <Clock className="h-3 w-3" />
             {format(parseISO(event.start), 'HH:mm')}–{format(parseISO(event.end), 'HH:mm')}
           </span>
           {event.location && (
-            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location}</span>
+            <span className="flex items-start gap-1 min-w-0"><MapPin className="h-3 w-3 shrink-0 mt-0.5" /> <span className="break-words">{event.location}</span></span>
           )}
         </p>
         {event.description && (
-          <p className="text-[11px] text-muted-foreground italic">{event.description}</p>
+          <p className="text-[11px] text-muted-foreground italic break-words">{event.description}</p>
         )}
       </div>
     </div>

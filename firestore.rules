@@ -20,7 +20,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())) ||
         request.auth.token.email == 'bishopshullhub@gmail.com'
       );
     }
@@ -98,13 +98,17 @@ service cloud.firestore {
     }
 
     match /security_team/{contactId} {
-      allow read, write: if isAdmin();
+      // Public `get` is required for the login Activate flow to pre-check
+      // whether an email is on the allowlist before creating an Auth account.
+      allow get: if true;
+      allow list, create, update, delete: if isAdmin();
     }
 
     match /admins/{adminId} {
-      allow get: if isSignedIn();
-      allow list: if isAdmin();
-      allow create, update, delete: if false;
+      // Same Activate-flow allowance: anyone can probe a single doc by email,
+      // but only existing admins can list or modify the collection.
+      allow get: if true;
+      allow list, create, update, delete: if isAdmin();
     }
   }
 }
