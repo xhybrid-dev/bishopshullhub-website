@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hire Assistant Preview — Bishops Hull Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         hsl(171, 33%, 95%);
+      --fg:         hsl(171, 45%, 10%);
+      --card:       #fff;
+      --muted:      hsl(171, 15%, 92%);
+      --muted-fg:   hsl(171, 20%, 40%);
+      --primary:    hsl(171, 44%, 38%);
+      --primary-fg: hsl(171, 33%, 98%);
+      --border:     hsl(171, 20%, 85%);
+      --radius:     0.75rem;
+      --shadow:     0 8px 32px rgba(0,0,0,.14);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+    }
+
+    /* ── fake page backdrop ── */
+    .fake-page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 10rem;
+    }
+    .fake-page h1 { font-size: 2rem; font-weight: 700; margin-bottom: .5rem; }
+    .fake-page p  { color: var(--muted-fg); line-height: 1.7; margin-bottom: 1rem; }
+    .fake-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .badge {
+      display: inline-block;
+      background: var(--muted);
+      color: var(--muted-fg);
+      font-size: .7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      padding: .2rem .6rem;
+      border-radius: 999px;
+      margin-bottom: 1rem;
+    }
+
+    /* ── CHAT WIDGET ── */
+    #chat-btn {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 50;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, hsl(171,44%,38%), hsl(171,60%,48%));
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(0,100,80,.35);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .15s, box-shadow .15s;
+    }
+    #chat-btn:hover { transform: scale(1.07); box-shadow: 0 6px 26px rgba(0,100,80,.45); }
+    #chat-btn:active { transform: scale(.95); }
+    #chat-btn svg { width: 24px; height: 24px; }
+
+    #chat-panel {
+      position: fixed;
+      bottom: 5rem;
+      right: 1.5rem;
+      z-index: 50;
+      width: 320px;
+      max-height: 520px;
+      display: flex;
+      flex-direction: column;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1.25rem;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      transform-origin: bottom right;
+      transition: transform .2s cubic-bezier(.34,1.56,.64,1), opacity .15s;
+    }
+    #chat-panel.hidden { transform: scale(.88); opacity: 0; pointer-events: none; }
+
+    /* Header */
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: .625rem;
+      padding: .75rem 1rem;
+      background: var(--primary);
+      color: var(--primary-fg);
+      flex-shrink: 0;
+    }
+    .chat-header-icon {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.18);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .chat-header-icon svg { width: 18px; height: 18px; }
+    .chat-header-text { flex: 1; min-width: 0; }
+    .chat-header-text p:first-child { font-size: .875rem; font-weight: 600; }
+    .chat-header-text p:last-child  { font-size: .75rem; opacity: .75; }
+    .chat-close {
+      background: transparent; border: none; cursor: pointer;
+      color: inherit; border-radius: 50%; padding: 4px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .1s;
+    }
+    .chat-close:hover { background: rgba(255,255,255,.2); }
+    .chat-close svg { width: 16px; height: 16px; }
+
+    /* Messages */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: .75rem;
+      display: flex;
+      flex-direction: column;
+      gap: .625rem;
+      scroll-behavior: smooth;
+    }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .msg-row { display: flex; }
+    .msg-row.user { justify-content: flex-end; }
+    .msg-row.bot  { justify-content: flex-start; }
+    .msg-bubble {
+      max-width: 85%;
+      border-radius: 1rem;
+      padding: .6rem .875rem;
+      font-size: .8125rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+    .msg-row.user .msg-bubble {
+      background: var(--primary);
+      color: var(--primary-fg);
+      border-bottom-right-radius: .25rem;
+    }
+    .msg-row.bot .msg-bubble {
+      background: var(--muted);
+      color: var(--fg);
+      border-bottom-left-radius: .25rem;
+    }
+
+    /* Typing indicator */
+    .typing { display: flex; align-items: center; gap: 4px; padding: .5rem .875rem; }
+    .typing span {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted-fg);
+      animation: bounce 1.2s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: .2s; }
+    .typing span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+
+    /* Input */
+    .chat-input-row {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .625rem .75rem;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .chat-input-row input {
+      flex: 1;
+      border: 1px solid var(--border);
+      border-radius: .625rem;
+      padding: .5rem .75rem;
+      font-size: .8125rem;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--fg);
+      outline: none;
+      transition: border-color .15s;
+    }
+    .chat-input-row input:focus { border-color: var(--primary); }
+    .chat-input-row input::placeholder { color: var(--muted-fg); }
+    .send-btn {
+      width: 36px; height: 36px;
+      border-radius: .625rem;
+      border: none;
+      background: var(--primary);
+      color: var(--primary-fg);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: opacity .15s, transform .1s;
+    }
+    .send-btn:disabled { opacity: .4; cursor: default; }
+    .send-btn:not(:disabled):hover { opacity: .88; }
+    .send-btn:not(:disabled):active { transform: scale(.92); }
+    .send-btn svg { width: 15px; height: 15px; }
+
+    /* ── Demo controls ── */
+    .demo-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: hsl(171,44%,15%);
+      color: #eaf7f5;
+      padding: .625rem 1rem;
+      font-size: .75rem;
+      display: flex; align-items: center; gap: .75rem;
+      z-index: 100;
+    }
+    .demo-bar strong { color: hsl(171,60%,72%); }
+    .demo-scenarios { display: flex; gap: .4rem; flex-wrap: wrap; margin-left: auto; }
+    .demo-scenarios button {
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.2);
+      color: #eaf7f5;
+      border-radius: 999px;
+      padding: .25rem .7rem;
+      font-size: .7rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .demo-scenarios button:hover { background: rgba(255,255,255,.22); }
+
+    body { padding-top: 2.5rem; }
+
+    /* mobile */
+    @media (max-width: 600px) {
+      #chat-panel { left: .75rem; right: .75rem; width: auto; bottom: 4.5rem; }
+      #chat-btn   { right: auto; left: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Demo control bar -->
+<div class="demo-bar">
+  <strong>PREVIEW</strong> — Hire Assistant chatbot demo (simulated responses)
+  <div class="demo-scenarios">
+    <button onclick="injectQuestion('How much does it cost to hire the hall?')">Pricing</button>
+    <button onclick="injectQuestion('Is the hall free on Saturday 12th July from 2pm to 6pm?')">Availability</button>
+    <button onclick="injectQuestion('Can I bring a bouncy castle?')">Bouncy castle</button>
+    <button onclick="injectQuestion('What time is the last train to London?')">Off-topic</button>
+    <button onclick="injectQuestion('How many people can the hall hold?')">Capacity</button>
+    <button onclick="resetChat()">Reset chat</button>
+  </div>
+</div>
+
+<!-- Fake page content -->
+<div class="fake-page">
+  <span class="badge">Bishops Hull Hub</span>
+  <h1>Community Hall Hire</h1>
+  <p>A great space for events, parties, meetings, and community activities in the heart of Bishops Hull, Taunton. This page shows a preview of the Hire Assistant chatbot — click the <strong>chat button</strong> in the bottom corner to try it.</p>
+
+  <div class="fake-card">
+    <p><strong>Main Hall</strong> — 14.8m × 9m · up to 110 guests · kitchen · AV · Wi-Fi · parking</p>
+    <p style="margin-top:.5rem;">From £18/hour · Day rate £140 · Deposits from £50</p>
+  </div>
+  <div class="fake-card">
+    <p>Use the <strong>demo buttons above</strong> to inject sample questions and see how the bot responds to different enquiry types.</p>
+  </div>
+</div>
+
+<!-- Chat button -->
+<button id="chat-btn" onclick="toggleChat()" aria-label="Open hire assistant">
+  <!-- MessageCircle icon -->
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+</button>
+
+<!-- Chat panel -->
+<div id="chat-panel" class="hidden">
+  <div class="chat-header">
+    <div class="chat-header-icon">
+      <!-- Bot icon -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        <line x1="12" y1="3" x2="12" y2="7"/>
+        <circle cx="8.5" cy="16" r="1.5" fill="currentColor"/>
+        <circle cx="15.5" cy="16" r="1.5" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="chat-header-text">
+      <p>Hire Assistant</p>
+      <p>Bishops Hull Hub</p>
+    </div>
+    <button class="chat-close" onclick="toggleChat()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="chat-messages" id="chat-messages"></div>
+
+  <div class="chat-input-row">
+    <input id="chat-input" type="text" placeholder="Ask about hiring the Hub…"
+      onkeydown="handleKey(event)" oninput="updateSend()" />
+    <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+  // ── Simulated responses ──────────────────────────────────────────────
+  const RESPONSES = [
+    {
+      match: /how much|price|cost|rate|fee|charge/i,
+      reply: `Hiring the Hub costs **£18 per hour**, charged in 15-minute increments.\n\nIf you need the hall for 8 or more consecutive hours within a single day, there's a **day rate of £140**.\n\nA refundable deposit is also required:\n• **£50** if your hire ends before 8pm\n• **£100** if your hire ends at or after 8pm\n\nDeposits are returned within 7 days after the event, subject to inspection.\n\nTo submit a hire enquiry, visit the hire page at bhhub.co.uk/hire.`
+    },
+    {
+      match: /bouncy castle|bouncy|inflatable/i,
+      reply: `Yes, bouncy castles are permitted at the Hub!\n\n• **Indoors:** maximum height of **3.5m** (the hall's vaulted ceiling is up to 4m, but please check your inflatable's dimensions carefully)\n• **Outdoors:** allowed on the terrace/grounds in **summer only**, weather permitting\n\nPlease note that stage smoke, haze machines, or dry ice are **not** allowed inside — the smoke alarms will trigger.\n\nAny questions? Contact bhhubbookings@gmail.com.`
+    },
+    {
+      match: /available|availability|free|book|saturday|sunday|monday|tuesday|wednesday|thursday|friday|\d+\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,
+      reply: `I've checked the live calendar for **Saturday 12th July, 14:00–18:00**.\n\n✅ **That slot looks free!**\n\nA few things to keep in mind:\n• Bookings require a minimum of **14 days' advance notice**\n• Your hire duration must include setup and cleanup time\n• A **£50 deposit** applies (hire ends before 8pm)\n\nTo request this slot, submit a hire enquiry at **bhhub.co.uk/hire** — the bookings secretary aims to reply within 3 working days.`
+    },
+    {
+      match: /train|bus|taxi|hotel|restaurant|weather|forecast|food|catering(?! require)/i,
+      reply: `I'm only able to help with **Bishops Hull Hub hire enquiries** — things like availability, pricing, facilities, and the booking process.\n\nFor other questions, please contact the team at info@bhhub.co.uk and they'll point you in the right direction.`
+    },
+    {
+      match: /how many|capacity|people|guests|fit|hold/i,
+      reply: `The main hall can hold up to **110 people**.\n\nThe space measures **14.8m × 9m** with a vaulted ceiling reaching up to 4m at its highest point. The hall comes with 12 tables and approximately 80 chairs — additional tables are available from the Playing Field Trust if needed.\n\nThere's also a south-facing **terrace (23m × 2.5m)** that's ideal for outdoor catering or entertainment in good weather.`
+    },
+    {
+      match: /kitchen|facilities|equipment|sound|projector|wifi|wi-fi|parking/i,
+      reply: `Every hire includes:\n\n• **Professional kitchen** (fully equipped)\n• **12 tables** and ~80 chairs\n• **Surround sound** audio system\n• **Projector and screen**\n• **Free Wi-Fi**\n• Access to the south-facing **terrace**\n• **18 car parking spaces** on site (note: 2.0m height restriction on the gate)\n\nBookings run from 08:00 to midnight. All setup and cleanup time must be included within your booked slot.`
+    },
+    {
+      match: /dog|pet|animal/i,
+      reply: `Dogs and other pets are **not permitted** at Bishops Hull Hub, with the exception of **registered guide dogs and assistance dogs**.\n\nIf you have any specific requirements, please mention them in your hire enquiry at bhhub.co.uk/hire.`
+    },
+    {
+      match: /alcohol|licence|license|bar|drinks/i,
+      reply: `Bishops Hull Hub **does not hold a premises licence**, so alcohol cannot be sold on the premises without a separate authorisation.\n\nIf you wish to sell alcohol at your event, you will need to apply for a **Temporary Events Notice (TEN)** from the Local Authority in advance.\n\nServing alcohol without a charge to guests is generally permitted — but please check with the bookings secretary if you're unsure: bhhubbookings@gmail.com.`
+    },
+    {
+      match: /contact|email|phone|secretary|reach|get in touch/i,
+      reply: `For hire enquiries, the best contact is:\n\n📧 **bhhubbookings@gmail.com**\n\nThe bookings secretary aims to reply within **3 working days**.\n\nFor general enquiries about the Hub, you can also reach the committee at info@bhhub.co.uk.\n\nAlternatively, you can submit a formal hire enquiry directly at **bhhub.co.uk/hire**.`
+    },
+    {
+      match: /firework|smoke|fog|haze|dry ice/i,
+      reply: `A few restrictions apply regarding special effects and pyrotechnics:\n\n• **Fireworks are not permitted** — the Hub is close to residential properties\n• **Stage smoke, haze machines, and dry ice are not advisable** indoors as they will trigger the smoke alarms\n\nIf you're planning anything unusual for your event, it's best to check with the bookings secretary first: bhhubbookings@gmail.com.`
+    },
+    {
+      match: /deposit|refund|return/i,
+      reply: `A **refundable deposit** is required for all bookings:\n\n• **£50** if your hire ends before 8:00pm\n• **£100** if your hire ends at or after 8:00pm\n\nThe deposit is returned within **7 days** after the event, following an inspection of the hall. If there are any cleaning or damage costs, these will be deducted:\n• Cleaning: £15/hour (daytime) or £20/hour (evening)\n• Minimum 1-hour cleaning charge\n\nAny questions about deposits? Contact bhhubbookings@gmail.com.`
+    },
+  ];
+
+  const FALLBACK = `That's a good question! I don't have specific information about that in my knowledge base.\n\nFor anything I can't answer, please contact the bookings secretary directly:\n📧 **bhhubbookings@gmail.com**\n\nThey aim to reply within 3 working days. You can also browse the full FAQ at bhhub.co.uk/faq.`;
+
+  function getSimulatedResponse(text) {
+    for (const r of RESPONSES) {
+      if (r.match.test(text)) return r.reply;
+    }
+    return FALLBACK;
+  }
+
+  // ── Chat state ────────────────────────────────────────────────────────
+  let isOpen = false;
+  let isLoading = false;
+
+  const WELCOME = "Hi! I'm the Hire Assistant for Bishops Hull Hub. I can help with questions about hiring the hall — availability, pricing, facilities, and more. What would you like to know?";
+
+  function toggleChat() {
+    isOpen = !isOpen;
+    document.getElementById('chat-panel').classList.toggle('hidden', !isOpen);
+    const btn = document.getElementById('chat-btn');
+    btn.innerHTML = isOpen
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+    if (isOpen) setTimeout(() => document.getElementById('chat-input').focus(), 150);
+  }
+
+  function appendMessage(role, text) {
+    const container = document.getElementById('chat-messages');
+    const row = document.createElement('div');
+    row.className = `msg-row ${role === 'user' ? 'user' : 'bot'}`;
+
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    // Simple bold markdown render
+    bubble.innerHTML = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+
+    row.appendChild(bubble);
+    container.appendChild(row);
+    container.scrollTop = container.scrollHeight;
+    return row;
+  }
+
+  function showTyping() {
+    const container = document.getElementById('chat-messages');
+    const row = document.createElement('div');
+    row.className = 'msg-row bot';
+    row.id = 'typing-indicator';
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble typing';
+    bubble.innerHTML = '<span></span><span></span><span></span>';
+    row.appendChild(bubble);
+    container.appendChild(row);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function hideTyping() {
+    const el = document.getElementById('typing-indicator');
+    if (el) el.remove();
+  }
+
+  function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text || isLoading) return;
+
+    input.value = '';
+    updateSend();
+    appendMessage('user', text);
+    isLoading = true;
+
+    showTyping();
+    const delay = 900 + Math.random() * 800;
+    setTimeout(() => {
+      hideTyping();
+      const reply = getSimulatedResponse(text);
+      appendMessage('bot', reply);
+      isLoading = false;
+      updateSend();
+      input.focus();
+    }, delay);
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  }
+
+  function updateSend() {
+    const input = document.getElementById('chat-input');
+    document.getElementById('send-btn').disabled = !input.value.trim() || isLoading;
+  }
+
+  function injectQuestion(q) {
+    if (!isOpen) toggleChat();
+    const input = document.getElementById('chat-input');
+    input.value = q;
+    updateSend();
+    setTimeout(sendMessage, 200);
+  }
+
+  function resetChat() {
+    document.getElementById('chat-messages').innerHTML = '';
+    appendMessage('bot', WELCOME);
+  }
+
+  // Initialise with welcome message
+  window.addEventListener('DOMContentLoaded', () => {
+    appendMessage('bot', WELCOME);
+  });
+</script>
+</body>
+</html>

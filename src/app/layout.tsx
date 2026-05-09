@@ -3,6 +3,7 @@ import './globals.css';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import MobileFAB from '@/components/MobileFAB';
+import HireChatbot from '@/components/HireChatbot';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 
@@ -49,6 +50,7 @@ export default function RootLayout({
           </main>
           <Footer />
           <MobileFAB />
+          <HireChatbot />
           <Toaster />
         </FirebaseClientProvider>
       </body>
