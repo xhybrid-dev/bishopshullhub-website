@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { MessageCircle, X, Send, Loader2, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 type MessageRole = 'user' | 'model';
@@ -26,6 +25,24 @@ export default function HireChatbot() {
   const [loading, setLoading] = useState(false);
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Lock body scroll on mobile when the panel is open so the page
+  // doesn't scroll behind the chat overlay.
+  useEffect(() => {
+    if (!open || window.innerWidth >= 768) return;
+    const y = window.scrollY;
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${y}px`;
+    document.body.style.width = '100%';
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      window.scrollTo(0, y);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -115,8 +132,9 @@ export default function HireChatbot() {
             </button>
           </div>
 
-          {/* Messages */}
-          <ScrollArea className="flex-1 px-3 py-3">
+          {/* Messages — plain div with CSS scroll containment so touch
+              events don't leak through to the page behind on mobile */}
+          <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3">
             <div className="flex flex-col gap-3">
               {messages.map((msg, i) => (
                 <div
@@ -147,7 +165,7 @@ export default function HireChatbot() {
               )}
               <div ref={scrollEndRef} />
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Input */}
           <div className="flex items-center gap-2 px-3 py-3 border-t border-border shrink-0">

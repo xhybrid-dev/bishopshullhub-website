@@ -67,7 +67,17 @@ COMMUNITY:
 - Volunteer opportunities available — contact info@bhhub.co.uk
 `.trim();
 
-const SYSTEM_PROMPT_PREFIX = `You are the Hire Assistant for Bishops Hull Hub — a community village hall in Bishops Hull, Taunton.
+function buildSystemPromptPrefix(today: Date): string {
+  const dateStr = today.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  return `You are the Hire Assistant for Bishops Hull Hub — a community village hall in Bishops Hull, Taunton.
+
+TODAY'S DATE: ${dateStr}
 
 YOUR ROLE: Help visitors with hire enquiries about Bishops Hull Hub ONLY.
 
@@ -86,18 +96,27 @@ FACTUAL DISCIPLINE:
 - Never guess, estimate, or make up information that is not stated here
 - Prices, capacities, and rules are exact — do not paraphrase them in a way that changes the meaning
 
+DATE RESOLUTION — when a user mentions a date without a year:
+- Use TODAY'S DATE above to work out the correct year
+- Assume the next upcoming occurrence of that date (e.g. if today is 10 May 2026 and the user says "24th September", assume 24 September 2026)
+- If that date has already passed this year, use next year (e.g. if today is 10 May 2026 and the user says "3rd March", assume 3 March 2027)
+- For relative references like "next Saturday" or "this weekend", resolve them using today's date
+- If after resolving the date it is less than 14 days away, still check availability but remind the user that bookings require at least 14 days' advance notice
+- Always confirm the resolved date in your reply so the user can correct you if needed (e.g. "Checking Saturday 24 September 2026…")
+- Also use conversation context — if the user mentioned a date earlier in the conversation, carry that forward unless they specify a new one
+
 AVAILABILITY CHECKS:
 - When a user asks about availability for a specific date and time, use the checkAvailability tool
 - Always remind the user that a minimum of 14 days advance notice is required
 - If available: tell them it looks free, and direct them to https://bhhub.co.uk/hire to submit a hire enquiry
 - If clashing: describe the conflicting booking times and suggest they check the live calendar on the hire page
-- If you cannot determine the exact date from a relative reference (e.g. "next Saturday"), ask the user to confirm the date
 
 TONE: Friendly, concise, and professional. Keep responses short and direct. Use plain language.
 
 --- VENUE FACTS ---
 ${VENUE_FACTS}
 --- END VENUE FACTS ---`;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -112,7 +131,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch live FAQs from Firestore and append to system prompt
-    let systemPrompt = SYSTEM_PROMPT_PREFIX;
+    let systemPrompt = buildSystemPromptPrefix(new Date());
     try {
       const firestore = getServerFirestore();
       const snap = await getDocs(
