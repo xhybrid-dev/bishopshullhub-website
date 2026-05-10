@@ -7,6 +7,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -130,22 +131,21 @@ export default function HirePage() {
 
   const costInfo = calculateCost();
 
-  const snapToQuarterHour = (value: string, onChange: (v: string) => void) => {
-    if (!value) return;
-    const [h, m] = value.split(':').map(Number);
-    const snapped = Math.round(m / 15) * 15;
-    const finalH = snapped === 60 ? h + 1 : h;
-    const finalM = snapped === 60 ? 0 : snapped;
-    onChange(`${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`);
-  };
-
-  // Minimum selectable end time is always 15 minutes after the chosen start time
-  const minEndTime = (() => {
-    if (!startTime) return undefined;
-    const [h, m] = startTime.split(':').map(Number);
-    const total = h * 60 + m + 15;
-    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  // Quarter-hour time options from 08:00 to 23:45
+  const quarterHourOptions = (() => {
+    const options: string[] = [];
+    for (let h = 8; h < 24; h++) {
+      for (const m of [0, 15, 30, 45]) {
+        options.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+      }
+    }
+    return options;
   })();
+
+  // End-time options must be strictly after the chosen start time
+  const endTimeOptions = startTime
+    ? quarterHourOptions.filter((t) => t > startTime)
+    : [];
 
   // Warm the iCal cache as soon as the page loads so it's ready when the user reaches step 4
   useEffect(() => {
@@ -650,15 +650,18 @@ ${submittedData.additionalRequirements}
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Start Time</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="time"
-                                step="900"
-                                min="08:00"
-                                {...field}
-                                onBlur={() => snapToQuarterHour(field.value, field.onChange)}
-                              />
-                            </FormControl>
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select start time" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {quarterHourOptions.map((t) => (
+                                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -671,16 +674,22 @@ ${submittedData.additionalRequirements}
                             <FormLabel className={!startTime ? "text-muted-foreground" : ""}>
                               End Time
                             </FormLabel>
-                            <FormControl>
-                              <Input
-                                type="time"
-                                step="900"
-                                min={minEndTime}
-                                disabled={!startTime}
-                                {...field}
-                                onBlur={() => snapToQuarterHour(field.value, field.onChange)}
-                              />
-                            </FormControl>
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              disabled={!startTime}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select end time" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {endTimeOptions.map((t) => (
+                                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             {!startTime && (
                               <p className="text-xs text-muted-foreground">Select a start time first</p>
                             )}

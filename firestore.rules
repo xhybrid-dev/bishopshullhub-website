@@ -20,7 +20,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())) ||
         request.auth.token.email == 'bishopshullhub@gmail.com'
       );
     }
@@ -49,12 +49,21 @@ service cloud.firestore {
       // Submission
       allow create: if isSignedIn() && matchesPathId(enquiryId);
       
-      // Update: Admin can update anything. 
+      // Update: Admin can update anything.
       // Security Team (public) can ONLY update the 'status' to 'Reviewed'.
+      // Hirer (public) can submit hire confirmation if confirmationStatus moves Sent -> Submitted.
       allow update: if (isExistingAdmin() && idIsImmutable()) || (
-        request.resource.data.status == 'Reviewed' && 
+        request.resource.data.status == 'Reviewed' &&
         request.resource.data.id == resource.data.id &&
         request.resource.data.name == resource.data.name // Ensure other data stays consistent
+      ) || (
+        request.resource.data.confirmationStatus == 'Submitted' &&
+        resource.data.confirmationStatus == 'Sent' &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.name == resource.data.name &&
+        request.resource.data.dateRequired == resource.data.dateRequired &&
+        request.resource.data.emailAddress == resource.data.emailAddress &&
+        request.resource.data.status == resource.data.status
       );
 
       allow delete: if isExistingAdmin();
@@ -89,13 +98,17 @@ service cloud.firestore {
     }
 
     match /security_team/{contactId} {
-      allow read, write: if isAdmin();
+      // Public `get` is required for the login Activate flow to pre-check
+      // whether an email is on the allowlist before creating an Auth account.
+      allow get: if true;
+      allow list, create, update, delete: if isAdmin();
     }
 
     match /admins/{adminId} {
-      allow get: if isSignedIn();
-      allow list: if isAdmin();
-      allow create, update, delete: if false;
+      // Same Activate-flow allowance: anyone can probe a single doc by email,
+      // but only existing admins can list or modify the collection.
+      allow get: if true;
+      allow list, create, update, delete: if isAdmin();
     }
   }
 }

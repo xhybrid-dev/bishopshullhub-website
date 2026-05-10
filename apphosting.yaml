@@ -1,5 +1,10 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
+#
+# Secrets must be created in Google Secret Manager before deploy:
+#   firebase apphosting:secrets:set <secret-name>
+# Then grant the backend access:
+#   firebase apphosting:secrets:grantaccess <secret-name> --backend <backend-id>
 
 runConfig:
   # Increase this value if you'd like to automatically spin up
@@ -7,8 +12,76 @@ runConfig:
   maxInstances: 1
 
 env:
+  # --- Public site URL (used by server actions to build links in emails) ---
+  - variable: NEXT_PUBLIC_BASE_URL
+    value: https://bishopshullhub.co.uk
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # --- Google Maps (browser) ---
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     secret: google-maps-api-key
     availability:
       - BUILD
       - RUNTIME
+
+  # --- Firebase client SDK (must be inlined at build time) ---
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    secret: firebase-project-id
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    secret: firebase-app-id
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    secret: firebase-api-key
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    secret: firebase-auth-domain
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    secret: firebase-messaging-sender-id
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    secret: firebase-measurement-id
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: RESEND_API_KEY
+    secret: resend-api-key
+  - variable: GEMINI_API_KEY
+    secret: gemini-api-key
+
+  # --- Google Places (server-side reviews fetch) ---
+  - variable: GOOGLE_PLACES_API_KEY
+    secret: google-places-api-key
+    availability:
+      - RUNTIME
+  - variable: GOOGLE_PLACE_ID
+    secret: google-place-id
+    availability:
+      - RUNTIME
+  - variable: _FIREBASE_PROJECT_ID
+    secret: firebase-project-id
+  - variable: _FIREBASE_APP_ID
+    secret: firebase-app-id
+  - variable: _FIREBASE_API_KEY
+    secret: firebase-api-key
+  - variable: _FIREBASE_AUTH_DOMAIN
+    secret: firebase-auth-domain
+  - variable: _FIREBASE_MESSAGING_SENDER_ID
+    secret: firebase-messaging-sender-id
+  - variable: _FIREBASE_MEASUREMENT_ID
+    secret: firebase-measurement-id
+  - variable: _GOOGLE_PLACES_ID
+    secret: google-places-api-key

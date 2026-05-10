@@ -44,8 +44,6 @@ export default function HireProcessSection() {
   const outerRef        = useRef<HTMLDivElement>(null);
   const containerTopRef = useRef(0);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [direction,   setDirection]   = useState<'down' | 'up'>('down');
-  const [animKey,     setAnimKey]     = useState(0);
 
   /* ── Mobile carousel ref ── */
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -70,13 +68,7 @@ export default function HireProcessSection() {
       const next = Math.max(0, Math.min(ALL_STEPS.length - 1,
         Math.floor(scrollInto / SCROLL_PER_STEP),
       ));
-      setActiveIndex(prev => {
-        if (prev !== next) {
-          setDirection(next > prev ? 'down' : 'up');
-          setAnimKey(k => k + 1);
-        }
-        return next;
-      });
+      setActiveIndex(next);
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
@@ -112,8 +104,8 @@ export default function HireProcessSection() {
   return (
     <section>
       {/* Section header */}
-      <div className="text-center pt-4 pb-8">
-        <span className="inline-flex items-center px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold uppercase tracking-widest mb-4">
+      <div className="text-center pt-4 pb-4 md:pb-1">
+        <span className="inline-flex items-center px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold uppercase tracking-widest mb-3">
           How it works
         </span>
         <h2 className="text-2xl md:text-3xl font-headline font-bold text-foreground">
@@ -127,103 +119,190 @@ export default function HireProcessSection() {
         </p>
       </div>
 
-      {/* ══ DESKTOP — sticky scroll ════════════════════════════════ */}
+      {/* ══ DESKTOP — sticky scroll, liquid glass ═══════════════════ */}
       <div
         ref={outerRef}
         className="hidden md:block relative"
         style={{ height: `calc(100vh + ${ALL_STEPS.length * SCROLL_PER_STEP}px)` }}
       >
-        <div className="sticky top-0 h-screen flex items-center py-6">
-          <div className="w-full flex h-full max-h-[640px] rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="sticky top-20 h-[calc(100vh-5rem)] flex items-center">
+          <div className="relative w-full">
 
-            {/* Sidebar — step list */}
-            <div className="w-56 shrink-0 border-r border-border flex flex-col overflow-y-auto p-5 gap-5">
-              {PHASES.map((phase, pi) => (
-                <div key={phase.label}>
-                  <p className={cn(
-                    'text-[10px] font-bold uppercase tracking-widest mb-2 transition-colors duration-300',
-                    activePhaseIndex === pi ? 'text-primary' : 'text-muted-foreground/40',
-                  )}>
-                    {phase.label}
-                  </p>
-                  <div className="space-y-0.5">
-                    {phase.steps.map(s => {
-                      const idx      = ALL_STEPS.findIndex(x => x.n === s.n);
-                      const isActive = idx === activeIndex;
-                      const isDone   = idx < activeIndex;
-                      return (
-                        <div key={s.n} className={cn(
-                          'flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-all duration-300',
-                          isActive ? 'bg-primary/10 text-primary font-semibold' :
-                          isDone   ? 'text-muted-foreground/60' :
-                                     'text-muted-foreground/30',
-                        )}>
-                          <span className={cn(
-                            'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border transition-all duration-300',
-                            isActive ? 'bg-primary text-primary-foreground border-primary' :
-                            isDone   ? 'bg-primary/20 border-primary/30 text-primary' :
-                                       'bg-muted/50 border-border text-muted-foreground/30',
-                          )}>
-                            {isDone ? <Check className="h-2.5 w-2.5" /> : s.n}
-                          </span>
-                          <span className="leading-tight line-clamp-2">{s.title}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+            {/* Coloured blobs sit *behind* the glass to give it something to refract.
+                Wrapped in a softly-masked container so the colour fades into the page at the slab edges. */}
+            <div
+              aria-hidden
+              className="absolute inset-0 -m-10 overflow-hidden rounded-[2.5rem] pointer-events-none"
+              style={{
+                WebkitMaskImage:
+                  'radial-gradient(ellipse 75% 80% at 50% 50%, black 45%, transparent 100%)',
+                maskImage:
+                  'radial-gradient(ellipse 75% 80% at 50% 50%, black 45%, transparent 100%)',
+              }}
+            >
+              <div
+                className="absolute w-[20rem] h-[20rem] rounded-full blur-3xl opacity-40 transition-all duration-1000 ease-out"
+                style={{
+                  background: PHASES[0].color,
+                  top:  `${10 + activeIndex * 4}%`,
+                  left: `${-10 + activeIndex * 2}%`,
+                }}
+              />
+              <div
+                className="absolute w-[26rem] h-[26rem] rounded-full blur-3xl opacity-35 transition-all duration-1000 ease-out"
+                style={{
+                  background: PHASES[1].color,
+                  top:   `${30 - activeIndex * 2}%`,
+                  right: `${5 + activeIndex * 3}%`,
+                }}
+              />
+              <div
+                className="absolute w-[24rem] h-[24rem] rounded-full blur-3xl opacity-30 transition-all duration-1000 ease-out"
+                style={{
+                  background: PHASES[2].color,
+                  bottom: `${-5 + activeIndex * 2}%`,
+                  left:   `${30 + activeIndex * 1.5}%`,
+                }}
+              />
             </div>
 
-            {/* Animated content */}
-            <div className="flex-1 relative flex flex-col items-center justify-center px-12 overflow-hidden">
-              <span
-                aria-hidden
-                className="absolute text-[200px] font-black text-primary/[0.04] select-none pointer-events-none leading-none"
-                style={{ top: '50%', left: '50%', transform: 'translate(-38%, -50%)' }}
-              >
-                {String(step.n).padStart(2, '0')}
-              </span>
+            {/* The liquid-glass slab — soft top specular, diffuse glow, edges fade into the page */}
+            <div
+              className="relative w-full flex h-[480px] rounded-[2rem] bg-white/20 backdrop-blur-2xl overflow-hidden"
+              style={{
+                boxShadow:
+                  '0 50px 100px -50px rgba(20,80,70,0.14), ' +    // softer, more diffuse ground shadow
+                  'inset 0 1px 0 rgba(255,255,255,0.5), ' +       // top specular highlight
+                  'inset 0 -1px 0 rgba(255,255,255,0.12)',        // faint bottom rim catch
+                WebkitMaskImage:
+                  'radial-gradient(ellipse 100% 100% at 50% 50%, black 70%, transparent 100%)',
+                maskImage:
+                  'radial-gradient(ellipse 100% 100% at 50% 50%, black 70%, transparent 100%)',
+              }}
+            >
 
+              {/* Sidebar — step list (subtle column tint, no hard divider, hidden scrollbar) */}
               <div
-                key={animKey}
-                className={cn(
-                  'relative z-10 max-w-lg w-full text-center',
-                  'animate-in fade-in duration-500',
-                  direction === 'down' ? 'slide-in-from-bottom-8' : 'slide-in-from-top-8',
-                )}
+                className="w-52 shrink-0 bg-white/15 flex flex-col overflow-y-auto px-3 py-4 gap-3 relative z-10 [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: 'none' } as React.CSSProperties}
               >
-                <span className="inline-flex items-center px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold mb-5">
-                  {step.phase}
-                </span>
-                <h3 className="text-2xl lg:text-3xl font-headline font-bold text-foreground mb-4 leading-tight">
-                  {step.title}
-                </h3>
-                <p className="text-muted-foreground leading-relaxed max-w-sm mx-auto">
-                  {step.desc}
-                </p>
-                {isLast && (
-                  <button
-                    onClick={scrollToForm}
-                    className="mt-8 inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold text-sm hover:bg-primary/90 transition-colors shadow-md"
-                  >
-                    Start your enquiry <ChevronRight className="h-4 w-4" />
-                  </button>
-                )}
+                {PHASES.map((phase, pi) => (
+                  <div key={phase.label}>
+                    <p className={cn(
+                      'text-[10px] font-bold uppercase tracking-widest mb-1 transition-colors duration-300',
+                      activePhaseIndex === pi ? 'text-primary' : 'text-muted-foreground/50',
+                    )}>
+                      {phase.label}
+                    </p>
+                    <div className="space-y-px">
+                      {phase.steps.map(s => {
+                        const idx      = ALL_STEPS.findIndex(x => x.n === s.n);
+                        const isActive = idx === activeIndex;
+                        const isDone   = idx < activeIndex;
+                        return (
+                          <div key={s.n} className={cn(
+                            'flex items-center gap-2 px-2 py-1 rounded-lg text-xs transition-all duration-300',
+                            isActive ? 'bg-white/70 text-primary font-semibold shadow-sm backdrop-blur-sm' :
+                            isDone   ? 'text-foreground/60' :
+                                       'text-muted-foreground/40',
+                          )}>
+                            <span className={cn(
+                              'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border transition-all duration-300',
+                              isActive ? 'bg-primary text-primary-foreground border-primary' :
+                              isDone   ? 'bg-primary/20 border-primary/30 text-primary' :
+                                         'bg-white/40 border-white/50 text-muted-foreground/40',
+                            )}>
+                              {isDone ? <Check className="h-2.5 w-2.5" /> : s.n}
+                            </span>
+                            <span className="leading-tight line-clamp-2">{s.title}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              <div className="absolute top-5 right-6 text-xs font-medium text-muted-foreground tabular-nums">
-                {activeIndex + 1} / {ALL_STEPS.length}
-              </div>
-              <div className="absolute bottom-6 flex items-center gap-1.5">
-                {ALL_STEPS.map((_, i) => (
-                  <span key={i} className={cn(
-                    'rounded-full transition-all duration-300',
-                    i === activeIndex ? 'w-6 h-2 bg-primary' :
-                    i < activeIndex   ? 'w-2 h-2 bg-primary/40' :
-                                        'w-2 h-2 bg-border',
-                  )} />
-                ))}
+              {/* Animated content — steps slide vertically through the glass */}
+              <div className="flex-1 relative overflow-hidden">
+
+                {/* Big watermark numeral, drifts as you scroll */}
+                <span
+                  aria-hidden
+                  className="absolute text-[220px] font-black text-primary/[0.06] select-none pointer-events-none leading-none transition-all duration-700 ease-out"
+                  style={{
+                    top: '50%',
+                    left: '50%',
+                    transform: `translate(-50%, calc(-50% + ${(activeIndex % 2 === 0 ? 1 : -1) * 8}px))`,
+                  }}
+                >
+                  {String(step.n).padStart(2, '0')}
+                </span>
+
+                {/* Sliding stack — each step is a full-height pane that scrolls through the window */}
+                <div
+                  className="absolute inset-0 transition-transform duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                  style={{ transform: `translateY(-${activeIndex * 100}%)` }}
+                >
+                  {ALL_STEPS.map((s, i) => (
+                    <div
+                      key={s.n}
+                      className="absolute left-0 right-0 h-full flex flex-col items-center justify-center px-12 text-center"
+                      style={{ top: `${i * 100}%` }}
+                    >
+                      <div className={cn(
+                        'max-w-lg w-full transition-all duration-700 ease-out',
+                        i === activeIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-95',
+                      )}>
+                        <span
+                          className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold mb-4 backdrop-blur-sm border"
+                          style={{
+                            background: s.color.replace('hsl(', 'hsla(').replace(')', ' / 0.08)'),
+                            color: s.color,
+                            borderColor: s.color.replace('hsl(', 'hsla(').replace(')', ' / 0.2)'),
+                          }}
+                        >
+                          {s.phase}
+                        </span>
+                        <h3 className="text-2xl lg:text-3xl font-headline font-bold text-foreground mb-3 leading-tight">
+                          {s.title}
+                        </h3>
+                        <p className="text-muted-foreground leading-relaxed max-w-sm mx-auto text-sm">
+                          {s.desc}
+                        </p>
+                        {i === ALL_STEPS.length - 1 && (
+                          <button
+                            onClick={scrollToForm}
+                            className="mt-6 inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold text-sm hover:bg-primary/90 transition-colors shadow-md"
+                          >
+                            Start your enquiry <ChevronRight className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Top + bottom fade masks — reinforce the "scrolling through a window" feel */}
+                <div aria-hidden className="absolute top-0 inset-x-0 h-12 bg-gradient-to-b from-white/60 to-transparent pointer-events-none z-10" />
+                <div aria-hidden className="absolute bottom-0 inset-x-0 h-12 bg-gradient-to-t from-white/60 to-transparent pointer-events-none z-10" />
+
+                {/* Step counter */}
+                <div className="absolute top-4 right-5 text-xs font-medium text-muted-foreground tabular-nums z-20 px-2 py-1 rounded-md bg-white/40 backdrop-blur-sm border border-white/40">
+                  {activeIndex + 1} / {ALL_STEPS.length}
+                </div>
+
+                {/* Dot progress */}
+                <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 px-3 py-1.5 rounded-full bg-white/40 backdrop-blur-sm border border-white/40">
+                  {ALL_STEPS.map((_, i) => (
+                    <span key={i} className={cn(
+                      'rounded-full transition-all duration-300',
+                      i === activeIndex ? 'w-5 h-1.5 bg-primary' :
+                      i < activeIndex   ? 'w-1.5 h-1.5 bg-primary/40' :
+                                          'w-1.5 h-1.5 bg-foreground/15',
+                    )} />
+                  ))}
+                </div>
               </div>
             </div>
           </div>

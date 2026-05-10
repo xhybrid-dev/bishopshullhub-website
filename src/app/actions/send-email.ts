@@ -4,10 +4,69 @@
 import { formatEnquiryEmail } from '@/ai/flows/format-enquiry-email-flow';
 import { formatReviewEmail } from '@/ai/flows/format-review-email-flow';
 import { formatCustomerConfirmationEmail } from '@/ai/flows/format-customer-confirmation-email-flow';
+import {
+  formatHireConfirmationInviteEmail,
+  formatHireConfirmationAdminEmail,
+  formatHireConfirmationCustomerEmail,
+} from '@/ai/flows/format-hire-confirmation-email-flow';
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const ADMIN_EMAIL = 'bishopshullhub@gmail.com';
+const ADMIN_EMAIL = 'bhhubbookings@gmail.com';
+const TREASURER_EMAIL = 'jdlee9900@gmail.com';
+
+function buildFallbackAdminEmail(enquiryData: any) {
+  const subject = `New Booking Enquiry: ${enquiryData.typeOfEvent || 'Event'} on ${enquiryData.dateRequired || 'TBC'}`;
+  const textBody = `NEW BOOKING ENQUIRY
+-------------------
+Enquiry ID: ${enquiryData.id}
+Submitted:  ${enquiryData.submissionDateTime}
+
+Event:       ${enquiryData.typeOfEvent}
+Date:        ${enquiryData.dateRequired}
+Times:       ${enquiryData.startTime} – ${enquiryData.endTime}
+Attendance:  ${enquiryData.estimatedAttendance}
+
+Hirer:             ${enquiryData.name}
+Email:             ${enquiryData.emailAddress}
+Phone:             ${enquiryData.phoneNumber}
+Address:           ${enquiryData.postalAddress}, ${enquiryData.postcode}
+Preferred contact: ${enquiryData.preferredContact}
+
+Requirements:
+${enquiryData.additionalRequirements}`;
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+      <div style="background-color: #1a4d46; color: #fff; padding: 24px; text-align: center;">
+        <h1 style="margin: 0; font-size: 22px;">New Booking Enquiry</h1>
+        <p style="margin: 4px 0 0; opacity: 0.85; font-size: 13px;">Enquiry ID: ${enquiryData.id}</p>
+      </div>
+      <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
+        <h2 style="margin-top: 0; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Event</h2>
+        <p style="margin:4px 0;"><strong>Type:</strong> ${enquiryData.typeOfEvent}</p>
+        <p style="margin:4px 0;"><strong>Date:</strong> ${enquiryData.dateRequired}</p>
+        <p style="margin:4px 0;"><strong>Times:</strong> ${enquiryData.startTime} – ${enquiryData.endTime}</p>
+        <p style="margin:4px 0;"><strong>Attendance:</strong> ${enquiryData.estimatedAttendance}</p>
+
+        <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Hirer</h2>
+        <p style="margin:4px 0;"><strong>Name:</strong> ${enquiryData.name}</p>
+        <p style="margin:4px 0;"><strong>Email:</strong> ${enquiryData.emailAddress}</p>
+        <p style="margin:4px 0;"><strong>Phone:</strong> ${enquiryData.phoneNumber}</p>
+        <p style="margin:4px 0;"><strong>Address:</strong> ${enquiryData.postalAddress}, ${enquiryData.postcode}</p>
+        <p style="margin:4px 0;"><strong>Preferred contact:</strong> ${enquiryData.preferredContact}</p>
+
+        <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Requirements</h2>
+        <p style="margin:4px 0; white-space: pre-wrap;">${enquiryData.additionalRequirements}</p>
+
+        <p style="font-size: 12px; color: #64748b; margin-top: 28px; text-align: center;">
+          Bishops Hull Hub Automated Booking System
+        </p>
+      </div>
+    </div>`;
+
+  return { subject, htmlBody, textBody };
+}
 
 /**
  * Server Action to handle the logic of sending the enquiry email to administrators
@@ -18,9 +77,15 @@ export async function sendEnquiryEmailAction(enquiryData: any) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const faqUrl = `${baseUrl}/faq`;
 
-    // 1. Format and send Admin Notification
-    const adminEmail = await formatEnquiryEmail({ enquiryData });
-    
+    // 1. Format Admin Notification — fall back to a static template if AI is unavailable
+    let adminEmail;
+    try {
+      adminEmail = await formatEnquiryEmail({ enquiryData });
+    } catch (aiError: any) {
+      console.error('AI formatting failed for admin enquiry email, using fallback:', aiError);
+      adminEmail = buildFallbackAdminEmail(enquiryData);
+    }
+
     // 2. Format and send Customer Confirmation
     const customerEmail = await formatCustomerConfirmationEmail({ enquiryData, faqUrl });
 
@@ -149,4 +214,238 @@ Review here: ${reviewUrl}
     console.error('Failed to send security email:', error);
     return { success: false, error: error.message || 'Failed to dispatch security emails' };
   }
+}
+
+/**
+ * Server Action — admin clicks "Send Confirmation": email the hirer a link to /confirm/[id]
+ * where they accept the conditions, supply bank details and sign.
+ */
+export async function sendHireConfirmationInviteAction(enquiryData: any, baseUrl: string) {
+  try {
+    if (!enquiryData?.emailAddress) {
+      return { success: false, error: 'Enquiry has no email address.' };
+    }
+
+    const confirmUrl = `${baseUrl}/confirm/${enquiryData.id}`;
+    const email = await formatHireConfirmationInviteEmail({ enquiryData, confirmUrl });
+
+    if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('re_your_api_key')) {
+      const { error } = await resend.emails.send({
+        from: 'Bishops Hull Hub <bookings@bishopshullhub.co.uk>',
+        to: enquiryData.emailAddress,
+        subject: email.subject,
+        html: email.htmlBody,
+        text: email.textBody,
+        replyTo: ADMIN_EMAIL,
+      });
+      if (error) throw new Error(`Resend Error: ${error.message}`);
+    } else {
+      console.log('--- HIRE CONFIRMATION INVITE SIMULATION ---');
+      console.log('To:', enquiryData.emailAddress);
+      console.log('Subject:', email.subject);
+      console.log('Confirm Link:', confirmUrl);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to send hire confirmation invite:', error);
+    return { success: false, error: error.message || 'Failed to send confirmation invite' };
+  }
+}
+
+/**
+ * Server Action — hirer submits the public confirmation form. Sends:
+ *  - the signed agreement (with bank details) to the bookings inbox
+ *  - a thank-you to the hirer
+ * The signature image (data URL) is attached to the admin email as a PNG.
+ */
+export async function submitHireConfirmationAction(input: {
+  enquiryData: any;
+  confirmation: {
+    yourName: string;
+    yourEmail: string;
+    organisation: string;
+    confirmedAt: string;
+    bookingDate: string;
+    startTime: string;
+    endTime: string;
+    bankName: string;
+    accountNumber: string;
+    sortCode: string;
+    accountName: string;
+    signatureDataUrl: string;
+  };
+}) {
+  try {
+    const { enquiryData, confirmation } = input;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const hireConditionsUrl = `${baseUrl}/hire-agreement`;
+
+    const adminEmail = await formatHireConfirmationAdminEmail({ enquiryData, confirmation });
+    const customerEmail = await formatHireConfirmationCustomerEmail({
+      enquiryData,
+      confirmation: {
+        yourName: confirmation.yourName,
+        bookingDate: confirmation.bookingDate,
+        startTime: confirmation.startTime,
+        endTime: confirmation.endTime,
+      },
+      hireConditionsUrl,
+    });
+
+    const signatureBase64 = (confirmation.signatureDataUrl || '').split(',')[1];
+    const attachments = signatureBase64
+      ? [{ filename: 'signature.png', content: signatureBase64 }]
+      : undefined;
+
+    if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('re_your_api_key')) {
+      const { error: adminErr } = await resend.emails.send({
+        from: 'Hub Bookings <bookings@bishopshullhub.co.uk>',
+        to: ADMIN_EMAIL,
+        subject: adminEmail.subject,
+        html: adminEmail.htmlBody,
+        text: adminEmail.textBody,
+        attachments,
+        replyTo: confirmation.yourEmail || enquiryData.emailAddress,
+      });
+      if (adminErr) throw new Error(`Resend Error (admin): ${adminErr.message}`);
+
+      const { error: custErr } = await resend.emails.send({
+        from: 'Bishops Hull Hub <noreply@bishopshullhub.co.uk>',
+        to: confirmation.yourEmail || enquiryData.emailAddress,
+        subject: customerEmail.subject,
+        html: customerEmail.htmlBody,
+        text: customerEmail.textBody,
+        replyTo: ADMIN_EMAIL,
+      });
+      if (custErr) throw new Error(`Resend Error (customer): ${custErr.message}`);
+    } else {
+      console.log('--- HIRE CONFIRMATION SUBMITTED SIMULATION ---');
+      console.log('Admin email subject:', adminEmail.subject);
+      console.log('Customer email subject:', customerEmail.subject);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to send hire confirmation emails:', error);
+    return { success: false, error: error.message || 'Failed to send confirmation emails' };
+  }
+}
+
+/**
+ * Server Action — admin clicks "Full Deposit Return" or "Deduction" on the
+ * Deposit Details panel. Emails the Treasurer with the hirer's bank details
+ * and the amount to refund (full or partial, with reason for any deduction).
+ */
+export async function sendDepositReturnEmailAction(input: {
+  enquiryData: any;
+  amount: number;
+  fullDeposit: number;
+  isFullReturn: boolean;
+  reason?: string;
+}) {
+  try {
+    const { enquiryData, amount, fullDeposit, isFullReturn, reason } = input;
+    const confirmation = enquiryData.confirmation || {};
+    const deduction = Math.max(0, fullDeposit - amount);
+
+    const subject = isFullReturn
+      ? `Deposit Return Authorised: ${enquiryData.name} (£${amount.toFixed(2)})`
+      : `Deposit Return with Deduction: ${enquiryData.name} (£${amount.toFixed(2)} of £${fullDeposit.toFixed(2)})`;
+
+    const textBody = `DEPOSIT RETURN AUTHORISATION
+----------------------------
+Hirer:         ${enquiryData.name}
+Event:         ${enquiryData.typeOfEvent}
+Hire Date:     ${enquiryData.dateRequired}
+Times:         ${enquiryData.startTime} – ${enquiryData.endTime}
+Enquiry ID:    ${enquiryData.id}
+
+Original Deposit:   £${fullDeposit.toFixed(2)}
+Amount to Return:   £${amount.toFixed(2)}
+${isFullReturn ? '' : `Deduction:          £${deduction.toFixed(2)}\nReason:             ${reason || 'Not provided'}\n`}
+Bank Details
+------------
+Account Name:    ${confirmation.accountName || 'Not provided'}
+Bank Name:       ${confirmation.bankName || 'Not provided'}
+Account Number:  ${confirmation.accountNumber || 'Not provided'}
+Sort Code:       ${formatSortCode(confirmation.sortCode)}
+
+Hirer Contact:   ${enquiryData.emailAddress} / ${enquiryData.phoneNumber}
+`.trim();
+
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+        <div style="background-color: #1a4d46; color: #fff; padding: 24px; text-align: center;">
+          <h1 style="margin: 0; font-size: 22px;">Deposit Return Authorisation</h1>
+          <p style="margin: 4px 0 0; opacity: 0.85; font-size: 13px;">Enquiry ID: ${enquiryData.id}</p>
+        </div>
+        <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
+          <h2 style="margin-top: 0; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Hire Summary</h2>
+          <p style="margin:4px 0;"><strong>Hirer:</strong> ${enquiryData.name}</p>
+          <p style="margin:4px 0;"><strong>Event:</strong> ${enquiryData.typeOfEvent}</p>
+          <p style="margin:4px 0;"><strong>Hire Date:</strong> ${enquiryData.dateRequired}</p>
+          <p style="margin:4px 0;"><strong>Times:</strong> ${enquiryData.startTime} – ${enquiryData.endTime}</p>
+
+          <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Refund</h2>
+          <p style="margin:4px 0;"><strong>Original Deposit:</strong> £${fullDeposit.toFixed(2)}</p>
+          <p style="margin:4px 0;"><strong>Amount to Return:</strong> <span style="color:#15803d; font-weight:bold;">£${amount.toFixed(2)}</span></p>
+          ${isFullReturn ? '' : `
+            <p style="margin:4px 0;"><strong>Deduction:</strong> £${deduction.toFixed(2)}</p>
+            <p style="margin:4px 0;"><strong>Reason:</strong> ${escapeHtml(reason || 'Not provided')}</p>
+          `}
+
+          <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Bank Details</h2>
+          <p style="margin:4px 0;"><strong>Account Name:</strong> ${escapeHtml(confirmation.accountName || 'Not provided')}</p>
+          <p style="margin:4px 0;"><strong>Bank Name:</strong> ${escapeHtml(confirmation.bankName || 'Not provided')}</p>
+          <p style="margin:4px 0;"><strong>Account Number:</strong> ${escapeHtml(confirmation.accountNumber || 'Not provided')}</p>
+          <p style="margin:4px 0;"><strong>Sort Code:</strong> ${escapeHtml(formatSortCode(confirmation.sortCode))}</p>
+
+          <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Hirer Contact</h2>
+          <p style="margin:4px 0;">${escapeHtml(enquiryData.emailAddress || '')} / ${escapeHtml(enquiryData.phoneNumber || '')}</p>
+
+          <p style="font-size: 12px; color: #64748b; margin-top: 28px; text-align: center;">
+            Bishops Hull Hub Automated Booking System
+          </p>
+        </div>
+      </div>`;
+
+    if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('re_your_api_key')) {
+      const { error } = await resend.emails.send({
+        from: 'Hub Bookings <bookings@bishopshullhub.co.uk>',
+        to: TREASURER_EMAIL,
+        subject,
+        html: htmlBody,
+        text: textBody,
+        replyTo: ADMIN_EMAIL,
+      });
+      if (error) throw new Error(`Resend Error: ${error.message}`);
+    } else {
+      console.log('--- DEPOSIT RETURN EMAIL SIMULATION ---');
+      console.log('To Treasurer:', TREASURER_EMAIL);
+      console.log('Subject:', subject);
+      console.log(textBody);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to send deposit return email:', error);
+    return { success: false, error: error.message || 'Failed to send deposit return email' };
+  }
+}
+
+function formatSortCode(sortCode?: string) {
+  if (!sortCode) return 'Not provided';
+  const digits = sortCode.replace(/\D/g, '');
+  if (digits.length !== 6) return sortCode;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 6)}`;
+}
+
+function escapeHtml(s: string) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

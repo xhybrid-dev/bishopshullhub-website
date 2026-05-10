@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, LayoutDashboard, LogOut, Inbox, User, Mail, Phone, Clock, Calendar, ShieldAlert, Key, LogIn, FileText, CheckCircle2, MoreVertical, ArrowRight, XCircle, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, UserPlus, Trash2, Send, AlertCircle, Info, HelpCircle, Plus, Pencil, Save } from 'lucide-react';
+import { Loader2, LayoutDashboard, LogOut, Inbox, User, Mail, Phone, Clock, Calendar, CalendarDays, ShieldAlert, Key, LogIn, FileText, CheckCircle2, MoreVertical, ArrowRight, XCircle, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, UserPlus, Trash2, Send, AlertCircle, AlertTriangle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle, RefreshCw } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, useDoc, setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, orderBy, updateDoc, onSnapshot } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
@@ -16,15 +16,34 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { sendSecurityReviewEmailAction } from '@/app/actions/send-email';
-import { format, isWithinInterval, addDays, startOfToday, parseISO } from 'date-fns';
+import { sendSecurityReviewEmailAction, sendHireConfirmationInviteAction, sendDepositReturnEmailAction } from '@/app/actions/send-email';
+import { getLiveCalendarEventsAction, type LiveEvent } from '@/app/actions/get-calendar';
+import type { ClashingEvent } from '@/app/actions/check-availability';
+import { EnquiryCalendarView } from '@/components/admin/EnquiryCalendarView';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { format, isWithinInterval, addDays, startOfToday, parseISO, isSameDay } from 'date-fns';
 
 const STATUS_COLUMNS = [
-  { id: 'Pending', label: 'Pending', color: 'bg-amber-500', icon: Clock3 },
-  { id: 'Reviewed', label: 'Reviewed', color: 'bg-blue-500', icon: FileText },
-  { id: 'Confirmed', label: 'Confirmed', color: 'bg-green-500', icon: CheckCircle2 },
-  { id: 'Rejected', label: 'Rejected', color: 'bg-red-500', icon: XCircle },
+  { id: 'Pending', label: 'Enquiry Received', color: 'bg-amber-500', icon: Clock3 },
+  { id: 'Reviewed', label: 'Visit Complete', color: 'bg-blue-500', icon: FileText },
+  { id: 'Confirmed', label: 'Hire Confirmed', color: 'bg-green-500', icon: CheckCircle2 },
+  { id: 'HireComplete', label: 'Hire Complete', color: 'bg-slate-500', icon: Calendar },
 ];
+
+const STATUS_LABELS: Record<string, string> = {
+  Pending: 'Enquiry Received',
+  Reviewed: 'Visit Complete',
+  Confirmed: 'Hire Confirmed',
+  Rejected: 'Rejected',
+};
+
+function getDepositAmount(enquiry: any): number {
+  const stored = Number(enquiry?.depositAmount ?? enquiry?.confirmation?.depositAmount);
+  if (Number.isFinite(stored) && stored > 0) return stored;
+  const end = (enquiry?.endTime || '').match(/^(\d{1,2}):/);
+  const hour = end ? Number(end[1]) : NaN;
+  return Number.isFinite(hour) && hour >= 20 ? 100 : 50;
+}
 
 const PRIMARY_ADMIN_EMAIL = 'bishopshullhub@gmail.com';
 
@@ -56,11 +75,14 @@ const DEFAULT_FAQS = [
 export default function AdminPortal() {
   const { toast } = useToast();
   const { firestore, auth, user, isUserLoading } = useFirebase();
-  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'calendar'>('kanban');
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  const [isLiveLoading, setIsLiveLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('enquiries');
   
   const adminDocRef = useMemoFirebase(() => {
-    return user && !user.isAnonymous ? doc(firestore, 'admins', user.uid) : null;
+    if (!user || user.isAnonymous || !user.email) return null;
+    return doc(firestore, 'admins', user.email.toLowerCase());
   }, [firestore, user]);
   
   const { data: adminRecord, isLoading: checkingAdmin } = useDoc(adminDocRef);
@@ -84,6 +106,13 @@ export default function AdminPortal() {
 
   const { data: securityContacts, isLoading: loadingSecurity } = useCollection(securityQuery);
 
+  const adminsQuery = useMemoFirebase(() => {
+    if (!hasAdminAccess) return null;
+    return query(collection(firestore, 'admins'), orderBy('addedAt', 'desc'));
+  }, [firestore, hasAdminAccess]);
+
+  const { data: adminUsers, isLoading: loadingAdmins } = useCollection(adminsQuery);
+
   const [faqItems,    setFaqItems]    = useState<any[] | null>(null);
   const [loadingFaqs, setLoadingFaqs] = useState(false);
 
@@ -106,6 +135,19 @@ export default function AdminPortal() {
     return () => unsub();
   }, [firestore, hasAdminAccess]);
 
+  const depositEnquiries = useMemo(() => {
+    if (!enquiries) return [];
+    const today = startOfToday();
+    return enquiries.filter(e => {
+      if (e.confirmationStatus !== 'Submitted') return false;
+      try {
+        return parseISO(e.dateRequired) < today;
+      } catch {
+        return false;
+      }
+    }).sort((a, b) => b.dateRequired.localeCompare(a.dateRequired));
+  }, [enquiries]);
+
   const upcomingBookings = useMemo(() => {
     if (!enquiries) return [];
     const today = startOfToday();
@@ -121,6 +163,90 @@ export default function AdminPortal() {
     }).sort((a, b) => a.dateRequired.localeCompare(b.dateRequired));
   }, [enquiries]);
 
+  // Pull the live Hallmaster feed once admin access is confirmed,
+  // so we can overlay it on the calendar and detect clashes against enquiries.
+  // Pass force=true to bypass the 5-minute server cache (used by the manual re-sync button).
+  const refreshLiveEvents = async (force = false) => {
+    setIsLiveLoading(true);
+    const result = await getLiveCalendarEventsAction({ force });
+    if (result.success && result.events) {
+      setLiveEvents(result.events);
+    }
+    setIsLiveLoading(false);
+    return result;
+  };
+
+  useEffect(() => {
+    if (!hasAdminAccess) return;
+    let cancelled = false;
+    setIsLiveLoading(true);
+    getLiveCalendarEventsAction().then(result => {
+      if (cancelled) return;
+      if (result.success && result.events) {
+        setLiveEvents(result.events);
+      }
+      setIsLiveLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [hasAdminAccess]);
+
+  const handleResyncLive = async () => {
+    const result = await refreshLiveEvents(true);
+    if (result.success) {
+      toast({ title: 'Live calendar synced', description: `Pulled ${result.events?.length ?? 0} event${(result.events?.length ?? 0) === 1 ? '' : 's'} from Hallmaster.` });
+    } else {
+      toast({ variant: 'destructive', title: 'Sync Failed', description: result.error || 'Could not reach the Hallmaster feed.' });
+    }
+  };
+
+  // Enquiries that haven't yet been moved into Hallmaster — i.e. everything
+  // except the "Hire Complete" column. These are the bookings the manager
+  // still needs to track for clashes.
+  const activeEnquiries = useMemo(() => {
+    if (!enquiries) return [];
+    const today = startOfToday();
+    return enquiries.filter(e => {
+      const status = e.status || 'Pending';
+      const hirerConfirmed = e.confirmationStatus === 'Submitted';
+      let isPast = false;
+      try { isPast = parseISO(e.dateRequired) < today; } catch {}
+      // Hide HireComplete (logged in Hallmaster already)
+      if (hirerConfirmed && isPast) return false;
+      if (status === 'Confirmed' && isPast) return false;
+      if (status === 'Rejected') return false;
+      return true;
+    });
+  }, [enquiries]);
+
+  // Build a clash map: { enquiryId: ClashingEvent[] } using the same overlap
+  // rule as check-availability (requestedStart < eventEnd && requestedEnd > eventStart).
+  const clashMap = useMemo(() => {
+    const map: Record<string, ClashingEvent[]> = {};
+    if (liveEvents.length === 0) return map;
+    activeEnquiries.forEach(e => {
+      if (!e.dateRequired || !e.startTime || !e.endTime) return;
+      let reqStart: Date, reqEnd: Date;
+      try {
+        reqStart = new Date(`${e.dateRequired}T${e.startTime}:00`);
+        reqEnd = new Date(`${e.dateRequired}T${e.endTime}:00`);
+      } catch { return; }
+      if (isNaN(reqStart.getTime()) || isNaN(reqEnd.getTime())) return;
+      const clashes: ClashingEvent[] = [];
+      liveEvents.forEach(ev => {
+        const evStart = parseISO(ev.start);
+        const evEnd = parseISO(ev.end);
+        if (!isSameDay(evStart, reqStart)) return;
+        if (reqStart < evEnd && reqEnd > evStart) {
+          clashes.push({ summary: ev.summary, start: ev.start, end: ev.end });
+        }
+      });
+      if (clashes.length > 0) map[e.id] = clashes;
+    });
+    return map;
+  }, [activeEnquiries, liveEvents]);
+
+  const [editingEnquiry, setEditingEnquiry] = useState<any | null>(null);
+
   const handleUpdateStatus = async (enquiryId: string, newStatus: string) => {
     try {
       const docRef = doc(firestore, 'booking_enquiries', enquiryId);
@@ -128,6 +254,36 @@ export default function AdminPortal() {
       toast({ title: "Status Updated", description: `Enquiry set to ${newStatus}.` });
     } catch (error) {
       toast({ variant: "destructive", title: "Update Failed", description: "Permissions error." });
+    }
+  };
+
+  const handleSaveEnquiry = async (enquiryId: string, updates: Record<string, any>) => {
+    try {
+      const docRef = doc(firestore, 'booking_enquiries', enquiryId);
+      await updateDoc(docRef, updates);
+      toast({ title: 'Booking Updated', description: 'Details saved successfully.' });
+      return true;
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not save changes.' });
+      return false;
+    }
+  };
+
+  const handleSendConfirmation = async (enquiry: any) => {
+    try {
+      const baseUrl = window.location.origin;
+      // Mark Sent in Firestore first so the public page can validate the link.
+      const docRef = doc(firestore, 'booking_enquiries', enquiry.id);
+      await updateDoc(docRef, { confirmationStatus: 'Sent', confirmationSentAt: new Date().toISOString() });
+
+      const result = await sendHireConfirmationInviteAction(enquiry, baseUrl);
+      if (result.success) {
+        toast({ title: "Confirmation Sent", description: `Hirer ${enquiry.name} has been emailed the confirmation link.` });
+      } else {
+        toast({ variant: "destructive", title: "Send Failed", description: result.error || "Could not send confirmation email." });
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Send Failed", description: err.message || "An unexpected error occurred." });
     }
   };
 
@@ -147,6 +303,41 @@ export default function AdminPortal() {
       }
     } catch (err: any) {
       toast({ variant: "destructive", title: "Send Failed", description: err.message || "An unexpected error occurred." });
+    }
+  };
+
+  const handleSendDepositReturn = async (enquiry: any, amount: number, isFullReturn: boolean, reason?: string) => {
+    try {
+      const fullDeposit = getDepositAmount(enquiry);
+      const result = await sendDepositReturnEmailAction({
+        enquiryData: enquiry,
+        amount,
+        fullDeposit,
+        isFullReturn,
+        reason,
+      });
+      if (result.success) {
+        const docRef = doc(firestore, 'booking_enquiries', enquiry.id);
+        await updateDoc(docRef, {
+          depositReturn: {
+            amount,
+            fullDeposit,
+            isFullReturn,
+            reason: reason || null,
+            sentAt: new Date().toISOString(),
+          },
+        });
+        toast({
+          title: isFullReturn ? 'Full Deposit Return Sent' : 'Deduction Return Sent',
+          description: `Treasurer notified to refund £${amount.toFixed(2)} to ${enquiry.name}.`,
+        });
+        return true;
+      }
+      toast({ variant: 'destructive', title: 'Send Failed', description: result.error || 'Could not email the Treasurer.' });
+      return false;
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Send Failed', description: err.message || 'An unexpected error occurred.' });
+      return false;
     }
   };
 
@@ -213,8 +404,8 @@ export default function AdminPortal() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 pb-20">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-muted/30 pb-20 overflow-x-clip">
+      <div className="container mx-auto px-4 py-8 max-w-full">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary text-primary-foreground rounded-lg shadow-lg"><LayoutDashboard className="h-6 w-6" /></div>
@@ -254,50 +445,96 @@ export default function AdminPortal() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="bg-white border p-1 rounded-2xl h-14 shadow-sm w-fit">
-            <TabsTrigger value="enquiries" className="rounded-xl px-6 h-full data-[state=active]:bg-primary data-[state=active]:text-white">
-              <Inbox className="h-4 w-4 mr-2" /> Booking Enquiries
-            </TabsTrigger>
-            <TabsTrigger value="security" className="rounded-xl px-6 h-full data-[state=active]:bg-primary data-[state=active]:text-white">
-              <ShieldCheck className="h-4 w-4 mr-2" /> Security Team
-            </TabsTrigger>
-            <TabsTrigger value="faqs" className="rounded-xl px-6 h-full data-[state=active]:bg-primary data-[state=active]:text-white">
-              <HelpCircle className="h-4 w-4 mr-2" /> FAQs
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+            <TabsList className="bg-white border p-1 rounded-2xl h-14 shadow-sm w-max">
+              <TabsTrigger value="enquiries" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
+                <Inbox className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Booking Enquiries</span>
+              </TabsTrigger>
+              <TabsTrigger value="security" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
+                <Users className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Users</span>
+              </TabsTrigger>
+              <TabsTrigger value="deposits" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
+                <Banknote className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Deposit Details</span>
+              </TabsTrigger>
+              <TabsTrigger value="faqs" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
+                <HelpCircle className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">FAQs</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="enquiries" className="space-y-8 animate-in fade-in">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
               <h2 className="text-xl font-headline font-bold text-primary">Workflow Management</h2>
-              <div className="bg-white rounded-lg p-1 border shadow-sm flex items-center">
-                <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('kanban')}><LayoutGrid className="h-4 w-4 mr-2" /> Kanban</Button>
-                <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('list')}><List className="h-4 w-4 mr-2" /> List</Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResyncLive}
+                  disabled={isLiveLoading}
+                  className="gap-2 shrink-0"
+                  title="Re-fetch the live Hallmaster feed (bypasses 5-min cache)"
+                >
+                  <RefreshCw className={cn('h-4 w-4', isLiveLoading && 'animate-spin')} />
+                  {isLiveLoading ? 'Syncing…' : 'Re-sync'}
+                </Button>
+                <div className="bg-white rounded-lg p-1 border shadow-sm flex items-center">
+                  <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="sm" className="px-2 sm:px-3" onClick={() => setViewMode('kanban')}><LayoutGrid className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Kanban</span></Button>
+                  <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="px-2 sm:px-3" onClick={() => setViewMode('list')}><List className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">List</span></Button>
+                  <Button variant={viewMode === 'calendar' ? 'secondary' : 'ghost'} size="sm" className="px-2 sm:px-3" onClick={() => setViewMode('calendar')}><CalendarDays className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Calendar</span></Button>
+                </div>
               </div>
             </div>
 
             {loadingEnquiries ? (
               <div className="py-20 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto" /></div>
+            ) : viewMode === 'calendar' ? (
+              <EnquiryCalendarView
+                enquiries={activeEnquiries}
+                liveEvents={liveEvents}
+                clashMap={clashMap}
+                isLiveLoading={isLiveLoading}
+                onEditEnquiry={setEditingEnquiry}
+              />
             ) : enquiries && enquiries.length > 0 ? (
               viewMode === 'kanban' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
-                  {STATUS_COLUMNS.map((col) => (
-                    <div key={col.id} className="flex flex-col gap-4">
-                      <div className="flex items-center gap-2 px-2">
-                        <div className={cn("w-2 h-2 rounded-full", col.color)} />
-                        <h3 className="font-bold text-primary">{col.label}</h3>
-                        <Badge variant="secondary">{enquiries.filter(e => (e.status || 'Pending') === col.id).length}</Badge>
+                  {STATUS_COLUMNS.map((col) => {
+                    const today = startOfToday();
+                    const isPastDate = (e: any) => {
+                      try { return parseISO(e.dateRequired) < today; } catch { return false; }
+                    };
+                    const inColumn = (e: any) => {
+                      const status = e.status || 'Pending';
+                      const hirerConfirmed = e.confirmationStatus === 'Submitted';
+                      if (hirerConfirmed) {
+                        if (col.id === 'HireComplete') return isPastDate(e);
+                        if (col.id === 'Confirmed') return !isPastDate(e);
+                        return false;
+                      }
+                      if (col.id === 'HireComplete') return status === 'Confirmed' && isPastDate(e);
+                      if (col.id === 'Confirmed') return status === 'Confirmed' && !isPastDate(e);
+                      return status === col.id;
+                    };
+                    const items = enquiries.filter(inColumn);
+                    return (
+                      <div key={col.id} className="flex flex-col gap-4">
+                        <div className="flex items-center gap-2 px-2">
+                          <div className={cn("w-2 h-2 rounded-full", col.color)} />
+                          <h3 className="font-bold text-primary">{col.label}</h3>
+                          <Badge variant="secondary">{items.length}</Badge>
+                        </div>
+                        <div className="flex flex-col gap-4 bg-muted/20 p-3 rounded-2xl min-h-[400px] border-2 border-dashed border-muted">
+                          {items.map(e => (
+                            <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} />
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-4 bg-muted/20 p-3 rounded-2xl min-h-[400px] border-2 border-dashed border-muted">
-                        {enquiries.filter(e => (e.status || 'Pending') === col.id).map(e => (
-                          <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {enquiries.map(e => <KanbanCard key={e.id} enquiry={e} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} isList />)}
+                  {enquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} isList />)}
                 </div>
               )
             ) : (
@@ -308,37 +545,160 @@ export default function AdminPortal() {
           <TabsContent value="security" className="animate-in fade-in">
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <Card className="border-none shadow-xl bg-white">
-                <CardHeader><CardTitle className="text-primary">Add Contact</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle className="text-primary">Add User</CardTitle>
+                  <CardDescription>
+                    Pre-authorise an email so the user can activate their account on the login page.
+                  </CardDescription>
+                </CardHeader>
                 <CardContent>
-                   <form onSubmit={(e) => {
+                  <form onSubmit={(e) => {
                     e.preventDefault();
                     const fd = new FormData(e.currentTarget);
-                    const name = fd.get('name') as string;
-                    const email = fd.get('email') as string;
-                    const contactId = Math.random().toString(36).substring(7);
-                    setDocumentNonBlocking(doc(firestore, 'security_team', contactId), { id: contactId, name, email, addedAt: new Date().toISOString() }, {});
+                    const name = (fd.get('name') as string).trim();
+                    const email = (fd.get('email') as string).trim().toLowerCase();
+                    const role = fd.get('role') as 'admin' | 'security';
+                    if (!email || !name) return;
+
+                    const collectionName = role === 'admin' ? 'admins' : 'security_team';
+                    setDocumentNonBlocking(
+                      doc(firestore, collectionName, email),
+                      {
+                        id: email,
+                        name,
+                        email,
+                        role,
+                        addedAt: new Date().toISOString(),
+                        addedBy: user?.email ?? null,
+                      },
+                      {},
+                    );
                     (e.target as HTMLFormElement).reset();
-                    toast({ title: "Contact Added" });
+                    toast({
+                      title: role === 'admin' ? 'Admin User Added' : 'Security Contact Added',
+                      description: `${name} can now activate their account on the login page.`,
+                    });
                   }} className="space-y-4">
-                    <Input name="name" placeholder="Name" required />
-                    <Input name="email" type="email" placeholder="Email" required />
-                    <Button type="submit" className="w-full">Add to Team</Button>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="user-name">Name</Label>
+                      <Input id="user-name" name="name" placeholder="Full name" required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="user-email">Email</Label>
+                      <Input id="user-email" name="email" type="email" placeholder="user@example.com" required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="user-role">Role</Label>
+                      <select
+                        id="user-role"
+                        name="role"
+                        defaultValue="security"
+                        className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <option value="security">Security Team — receives review emails</option>
+                        <option value="admin">Admin — full access to this portal</option>
+                      </select>
+                    </div>
+                    <Button type="submit" className="w-full">Add User</Button>
                   </form>
                 </CardContent>
               </Card>
 
-              <Card className="border-none shadow-xl bg-white">
-                <CardHeader><CardTitle className="text-primary">Current Team</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
-                  {securityContacts?.map(c => (
-                    <div key={c.id} className="flex justify-between items-center p-4 bg-muted/30 rounded-xl">
-                      <div><p className="font-bold">{c.name}</p><p className="text-xs opacity-60">{c.email}</p></div>
-                      <Button variant="ghost" size="icon" onClick={() => deleteDocumentNonBlocking(doc(firestore, 'security_team', c.id))} className="text-red-500"><Trash2 className="h-4 w-4" /></Button>
+              <div className="space-y-6">
+                <Card className="border-none shadow-xl bg-white">
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-primary flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4" /> Admin Users
+                      </CardTitle>
+                      <Badge variant="secondary">{adminUsers?.length ?? 0}</Badge>
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {loadingAdmins ? (
+                      <div className="py-6 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+                    ) : (adminUsers?.length ?? 0) === 0 ? (
+                      <p className="text-xs text-muted-foreground italic py-2">No admin users yet.</p>
+                    ) : (
+                      adminUsers!.map(a => (
+                        <div key={a.id} className="flex justify-between items-center gap-3 p-3 bg-muted/30 rounded-xl min-w-0">
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm break-words">{a.name || a.email}</p>
+                            <p className="text-xs opacity-60 break-words">{a.email}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={a.email === PRIMARY_ADMIN_EMAIL || a.email === user?.email}
+                            title={a.email === PRIMARY_ADMIN_EMAIL ? 'Cannot remove the primary admin' : a.email === user?.email ? "Can't remove yourself" : 'Remove admin'}
+                            onClick={() => deleteDocumentNonBlocking(doc(firestore, 'admins', a.id))}
+                            className="text-red-500 shrink-0"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-xl bg-white">
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-primary flex items-center gap-2">
+                        <Users className="h-4 w-4" /> Security Team
+                      </CardTitle>
+                      <Badge variant="secondary">{securityContacts?.length ?? 0}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {loadingSecurity ? (
+                      <div className="py-6 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+                    ) : (securityContacts?.length ?? 0) === 0 ? (
+                      <p className="text-xs text-muted-foreground italic py-2">No security contacts yet.</p>
+                    ) : (
+                      securityContacts!.map(c => (
+                        <div key={c.id} className="flex justify-between items-center gap-3 p-3 bg-muted/30 rounded-xl min-w-0">
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm break-words">{c.name}</p>
+                            <p className="text-xs opacity-60 break-words">{c.email}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteDocumentNonBlocking(doc(firestore, 'security_team', c.id))}
+                            className="text-red-500 shrink-0"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
              </div>
+          </TabsContent>
+
+          <TabsContent value="deposits" className="animate-in fade-in space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-headline font-bold text-primary">Deposit Returns Due</h2>
+              {depositEnquiries.length > 0 && <Badge variant="secondary">{depositEnquiries.length} pending</Badge>}
+            </div>
+
+            {loadingEnquiries ? (
+              <div className="py-20 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto" /></div>
+            ) : depositEnquiries.length === 0 ? (
+              <div className="text-center py-20 bg-white rounded-3xl border border-dashed text-muted-foreground">
+                No completed hires awaiting deposit return.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {depositEnquiries.map(e => (
+                  <DepositRow key={e.id} enquiry={e} onSend={handleSendDepositReturn} />
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="faqs" className="animate-in fade-in">
@@ -425,13 +785,21 @@ export default function AdminPortal() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <EditEnquiryDialog
+        enquiry={editingEnquiry}
+        onOpenChange={(open) => { if (!open) setEditingEnquiry(null); }}
+        onSave={handleSaveEnquiry}
+      />
     </div>
   );
 }
 
-function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, isList }: { enquiry: any, onUpdateStatus: (id: string, s: string) => void, onSendToSecurity: (e: any) => void, isList?: boolean }) {
+function KanbanCard({ enquiry, clashes, onUpdateStatus, onSendToSecurity, onSendConfirmation, onEdit, isList }: { enquiry: any, clashes?: ClashingEvent[], onUpdateStatus: (id: string, s: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onEdit: (e: any) => void, isList?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isSendingConfirm, setIsSendingConfirm] = useState(false);
+  const hasClash = (clashes?.length ?? 0) > 0;
 
   const handleReviewClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -440,16 +808,42 @@ function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, isList }: { enq
     setIsSending(false);
   };
 
+  const handleConfirmClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsSendingConfirm(true);
+    await onSendConfirmation(enquiry);
+    setIsSendingConfirm(false);
+  };
+
+  const confirmationStatus = enquiry.confirmationStatus as ('NotSent' | 'Sent' | 'Submitted' | undefined);
+  const showConfirmButton = enquiry.status === 'Reviewed' || enquiry.status === 'Confirmed';
+
   return (
-    <Card className={cn("border shadow-sm hover:shadow-md transition-all bg-white cursor-pointer overflow-hidden", isExpanded && "ring-2 ring-primary")} onClick={() => setIsExpanded(!isExpanded)}>
+    <Card className={cn("border shadow-sm hover:shadow-md transition-all bg-white cursor-pointer overflow-hidden", isExpanded && "ring-2 ring-primary", hasClash && "border-red-400 bg-red-50/40")} onClick={() => setIsExpanded(!isExpanded)}>
       <div className="p-4 space-y-3">
+        {hasClash && (
+          <div className="flex items-start gap-1.5 text-[10px] font-bold text-red-700 bg-red-100 border border-red-200 rounded-md px-2 py-1.5">
+            <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p>Clashes with live booking{(clashes?.length ?? 0) > 1 ? 's' : ''}</p>
+              {isExpanded && clashes!.map((c, i) => (
+                <p key={i} className="font-normal opacity-90 mt-0.5 break-words">
+                  • {c.summary} ({format(parseISO(c.start), 'HH:mm')}–{format(parseISO(c.end), 'HH:mm')})
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex justify-between items-start">
            <Badge variant="outline" className="text-[10px] font-mono">{enquiry.id.substring(0, 6)}</Badge>
            <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon" className="h-6 w-6"><MoreVertical className="h-3 w-3" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent className="text-xs">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(enquiry); }}>
+                <Pencil className="h-3 w-3 mr-2" /> Edit Details
+              </DropdownMenuItem>
               {['Pending', 'Reviewed', 'Confirmed', 'Rejected'].map(s => (
-                <DropdownMenuItem key={s} onClick={(e) => { e.stopPropagation(); onUpdateStatus(enquiry.id, s); }}>Mark as {s}</DropdownMenuItem>
+                <DropdownMenuItem key={s} onClick={(e) => { e.stopPropagation(); onUpdateStatus(enquiry.id, s); }}>Mark as {STATUS_LABELS[s] ?? s}</DropdownMenuItem>
               ))}
             </DropdownMenuContent>
            </DropdownMenu>
@@ -502,6 +896,26 @@ function KanbanCard({ enquiry, onUpdateStatus, onSendToSecurity, isList }: { enq
             {isSending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
             Request Security Review
           </Button>
+        )}
+
+        {showConfirmButton && confirmationStatus !== 'Submitted' && (
+          <Button
+            variant="default"
+            size="sm"
+            className="w-full gap-2 text-[10px] h-8 mt-2"
+            onClick={handleConfirmClick}
+            disabled={isSendingConfirm}
+          >
+            {isSendingConfirm ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileSignature className="h-3 w-3" />}
+            {confirmationStatus === 'Sent' ? 'Resend Confirmation' : 'Send Confirmation'}
+          </Button>
+        )}
+
+        {confirmationStatus === 'Submitted' && (
+          <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-md py-1.5 mt-2">
+            <CheckCircle2 className="h-3 w-3" />
+            Hire Confirmed by Hirer
+          </div>
         )}
       </div>
     </Card>
@@ -588,5 +1002,338 @@ function FAQAdminItem({
         </Button>
       </div>
     </div>
+  );
+}
+
+function formatSortCodeDisplay(sortCode?: string) {
+  if (!sortCode) return '—';
+  const digits = sortCode.replace(/\D/g, '');
+  if (digits.length !== 6) return sortCode;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 6)}`;
+}
+
+function DepositRow({
+  enquiry,
+  onSend,
+}: {
+  enquiry: any;
+  onSend: (enquiry: any, amount: number, isFullReturn: boolean, reason?: string) => Promise<boolean>;
+}) {
+  const [sendingFull, setSendingFull] = useState(false);
+  const [deductionOpen, setDeductionOpen] = useState(false);
+  const confirmation = enquiry.confirmation || {};
+  const fullDeposit = getDepositAmount(enquiry);
+  const previousReturn = enquiry.depositReturn as
+    | { amount: number; fullDeposit?: number; isFullReturn: boolean; sentAt: string; reason?: string | null }
+    | undefined;
+
+  const handleFullReturn = async () => {
+    setSendingFull(true);
+    await onSend(enquiry, fullDeposit, true);
+    setSendingFull(false);
+  };
+
+  return (
+    <Card className="border shadow-sm bg-white">
+      <CardContent className="p-5 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-primary text-base">{enquiry.name}</h3>
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+              <Calendar className="h-3 w-3" /> {enquiry.dateRequired} · {enquiry.startTime}–{enquiry.endTime}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">{enquiry.typeOfEvent}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Deposit</p>
+            <p className="text-lg font-bold text-primary">£{fullDeposit.toFixed(2)}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-muted/30 rounded-xl p-3 text-xs">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Account Name</p>
+            <p className="font-semibold">{confirmation.accountName || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Bank</p>
+            <p className="font-semibold">{confirmation.bankName || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Account Number</p>
+            <p className="font-mono">{confirmation.accountNumber || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Sort Code</p>
+            <p className="font-mono">{formatSortCodeDisplay(confirmation.sortCode)}</p>
+          </div>
+        </div>
+
+        {previousReturn && (
+          <div className="flex items-start gap-2 text-xs bg-green-50 border border-green-200 text-green-800 rounded-lg p-2.5">
+            <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">
+                {previousReturn.isFullReturn
+                  ? `Full deposit return (£${previousReturn.amount.toFixed(2)}) sent to Treasurer`
+                  : `Deduction return (£${previousReturn.amount.toFixed(2)} of £${previousReturn.fullDeposit?.toFixed?.(2) ?? fullDeposit.toFixed(2)}) sent to Treasurer`}
+              </p>
+              {previousReturn.reason && <p className="opacity-80 mt-0.5">Reason: {previousReturn.reason}</p>}
+              <p className="opacity-60 text-[10px] mt-0.5">{format(parseISO(previousReturn.sentAt), 'PPp')}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            className="flex-1 gap-2"
+            onClick={handleFullReturn}
+            disabled={sendingFull}
+          >
+            {sendingFull ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
+            Full Deposit Return
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1 gap-2"
+            onClick={() => setDeductionOpen(true)}
+          >
+            <MinusCircle className="h-4 w-4" />
+            Deduction
+          </Button>
+        </div>
+      </CardContent>
+
+      <DeductionDialog
+        open={deductionOpen}
+        onOpenChange={setDeductionOpen}
+        fullDeposit={fullDeposit}
+        hirerName={enquiry.name}
+        onSubmit={async (amount, reason) => {
+          const ok = await onSend(enquiry, amount, false, reason);
+          if (ok) setDeductionOpen(false);
+        }}
+      />
+    </Card>
+  );
+}
+
+function DeductionDialog({
+  open,
+  onOpenChange,
+  fullDeposit,
+  hirerName,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  fullDeposit: number;
+  hirerName: string;
+  onSubmit: (amount: number, reason: string) => Promise<void> | void;
+}) {
+  const [amount, setAmount] = useState<string>('');
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (open) {
+      setAmount('');
+      setReason('');
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  const handleSubmit = async () => {
+    const parsed = Number(amount);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      toast({ variant: 'destructive', title: 'Invalid amount', description: 'Enter a revised return amount of £0 or more.' });
+      return;
+    }
+    if (parsed > fullDeposit) {
+      toast({ variant: 'destructive', title: 'Amount too high', description: `The revised return cannot exceed the original deposit of £${fullDeposit.toFixed(2)}.` });
+      return;
+    }
+    if (!reason.trim()) {
+      toast({ variant: 'destructive', title: 'Reason required', description: 'Please provide a reason for the deduction.' });
+      return;
+    }
+    setSubmitting(true);
+    await onSubmit(parsed, reason.trim());
+    setSubmitting(false);
+  };
+
+  const deduction = Math.max(0, fullDeposit - Number(amount || 0));
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>Deposit Deduction</DialogTitle>
+          <DialogDescription>
+            Notify the Treasurer of a partial deposit return for <span className="font-semibold">{hirerName}</span>.
+            Original deposit: <span className="font-semibold">£{fullDeposit.toFixed(2)}</span>.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="deduction-amount">Revised return amount (£)</Label>
+            <Input
+              id="deduction-amount"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={fullDeposit}
+              step="0.01"
+              placeholder="e.g. 30.00"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+            />
+            {amount !== '' && Number.isFinite(Number(amount)) && (
+              <p className="text-xs text-muted-foreground">Deduction: £{deduction.toFixed(2)}</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="deduction-reason">Reason for deduction</Label>
+            <textarea
+              id="deduction-reason"
+              rows={3}
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder="e.g. Additional cleaning required (2 hours)"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={submitting} className="gap-2">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Send to Treasurer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const EDIT_FIELDS: Array<{ key: string; label: string; type?: 'text' | 'email' | 'tel' | 'date' | 'time' | 'number' | 'textarea' | 'select'; options?: string[] }> = [
+  { key: 'name', label: 'Hirer Name' },
+  { key: 'emailAddress', label: 'Email', type: 'email' },
+  { key: 'phoneNumber', label: 'Phone', type: 'tel' },
+  { key: 'preferredContact', label: 'Preferred Contact', type: 'select', options: ['Email', 'Phone'] },
+  { key: 'postalAddress', label: 'Postal Address' },
+  { key: 'postcode', label: 'Postcode' },
+  { key: 'typeOfEvent', label: 'Type of Event' },
+  { key: 'estimatedAttendance', label: 'Estimated Attendance', type: 'number' },
+  { key: 'dateRequired', label: 'Date Required', type: 'date' },
+  { key: 'startTime', label: 'Start Time', type: 'time' },
+  { key: 'endTime', label: 'End Time', type: 'time' },
+  { key: 'additionalRequirements', label: 'Additional Requirements', type: 'textarea' },
+];
+
+function EditEnquiryDialog({
+  enquiry,
+  onOpenChange,
+  onSave,
+}: {
+  enquiry: any | null;
+  onOpenChange: (open: boolean) => void;
+  onSave: (id: string, updates: Record<string, any>) => Promise<boolean>;
+}) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (enquiry) {
+      const next: Record<string, string> = {};
+      for (const f of EDIT_FIELDS) next[f.key] = enquiry[f.key] != null ? String(enquiry[f.key]) : '';
+      setValues(next);
+    }
+  }, [enquiry]);
+
+  if (!enquiry) return null;
+
+  const handleSubmit = async () => {
+    if (values.endTime && values.startTime && values.endTime <= values.startTime) {
+      toast({ variant: 'destructive', title: 'Invalid Times', description: 'End time must be after start time.' });
+      return;
+    }
+    setSaving(true);
+    const updates: Record<string, any> = {};
+    for (const f of EDIT_FIELDS) {
+      const v = values[f.key] ?? '';
+      updates[f.key] = f.type === 'number' ? (v === '' ? null : Number(v)) : v;
+    }
+    const ok = await onSave(enquiry.id, updates);
+    setSaving(false);
+    if (ok) onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={!!enquiry} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Booking Details</DialogTitle>
+          <DialogDescription>
+            Update the contact information, date, time, or other details for this enquiry.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {EDIT_FIELDS.map(f => {
+              const id = `edit-${f.key}`;
+              const value = values[f.key] ?? '';
+              const onChange = (v: string) => setValues(prev => ({ ...prev, [f.key]: v }));
+              const fullWidth = f.type === 'textarea' || f.key === 'postalAddress';
+              return (
+                <div key={f.key} className={cn('space-y-1.5', fullWidth && 'sm:col-span-2')}>
+                  <Label htmlFor={id}>{f.label}</Label>
+                  {f.type === 'textarea' ? (
+                    <textarea
+                      id={id}
+                      rows={3}
+                      value={value}
+                      onChange={e => onChange(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    />
+                  ) : f.type === 'select' ? (
+                    <select
+                      id={id}
+                      value={value}
+                      onChange={e => onChange(e.target.value)}
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      <option value="">Select…</option>
+                      {f.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                  ) : (
+                    <Input
+                      id={id}
+                      type={f.type ?? 'text'}
+                      value={value}
+                      onChange={e => onChange(e.target.value)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={saving} className="gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

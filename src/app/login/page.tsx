@@ -9,17 +9,21 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useFirebase, initiateEmailSignIn, initiateEmailSignUp } from '@/firebase';
+import { useFirebase, initiateEmailSignIn } from '@/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, LogIn, UserPlus, ShieldCheck } from 'lucide-react';
+import { Loader2, LogIn, KeyRound, ShieldCheck } from 'lucide-react';
+
+const PRIMARY_ADMIN_EMAIL = 'bishopshullhub@gmail.com';
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
-const signupSchema = z.object({
+const activateSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string(),
@@ -29,7 +33,7 @@ const signupSchema = z.object({
 });
 
 export default function LoginPage() {
-  const { auth, user, isUserLoading } = useFirebase();
+  const { auth, firestore, user, isUserLoading } = useFirebase();
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -46,8 +50,8 @@ export default function LoginPage() {
     defaultValues: { email: "", password: "" },
   });
 
-  const signupForm = useForm<z.infer<typeof signupSchema>>({
-    resolver: zodResolver(signupSchema),
+  const activateForm = useForm<z.infer<typeof activateSchema>>({
+    resolver: zodResolver(activateSchema),
     defaultValues: { email: "", password: "", confirmPassword: "" },
   });
 
@@ -63,13 +67,42 @@ export default function LoginPage() {
     }
   }
 
-  async function onSignup(values: z.infer<typeof signupSchema>) {
+  async function onActivate(values: z.infer<typeof activateSchema>) {
     setLoading(true);
+    const emailLower = values.email.trim().toLowerCase();
     try {
-      initiateEmailSignUp(auth, values.email, values.password);
-      toast({ title: "Account Created", description: "Welcome to the Hub Portal." });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Signup Failed", description: "Could not create account." });
+      // Pre-check allowlist: is this email already added by an admin?
+      const [adminDoc, securityDoc] = await Promise.all([
+        getDoc(doc(firestore, 'admins', emailLower)),
+        getDoc(doc(firestore, 'security_team', emailLower)),
+      ]);
+      const allowed = adminDoc.exists() || securityDoc.exists() || emailLower === PRIMARY_ADMIN_EMAIL;
+      if (!allowed) {
+        toast({
+          variant: "destructive",
+          title: "Email Not Authorised",
+          description: "Your email isn't on the user list. Ask an existing admin to add you first.",
+        });
+        return;
+      }
+
+      await createUserWithEmailAndPassword(auth, emailLower, values.password);
+      toast({ title: "Account Activated", description: "Welcome to the Hub Portal." });
+      // The provider's onAuthStateChanged will fire and the redirect effect above kicks in.
+    } catch (err: any) {
+      if (err?.code === 'auth/email-already-in-use') {
+        toast({
+          variant: "destructive",
+          title: "Account Already Exists",
+          description: "This email is already registered. Please use Sign In instead.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Activation Failed",
+          description: err?.message || "Could not activate the account.",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -97,13 +130,13 @@ export default function LoginPage() {
             Sign in to manage Hub activities and enquiries.
           </CardDescription>
         </div>
-        
+
         <Tabs defaultValue="login" className="w-full">
           <TabsList className="grid w-full grid-cols-2 rounded-none h-12">
-            <TabsTrigger value="login" className="data-[state=active]:bg-background">Login</TabsTrigger>
-            <TabsTrigger value="signup" className="data-[state=active]:bg-background">Register</TabsTrigger>
+            <TabsTrigger value="login" className="data-[state=active]:bg-background">Sign In</TabsTrigger>
+            <TabsTrigger value="activate" className="data-[state=active]:bg-background">Activate Account</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="login" className="p-6">
             <Form {...loginForm}>
               <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
@@ -136,34 +169,37 @@ export default function LoginPage() {
               </form>
             </Form>
           </TabsContent>
-          
-          <TabsContent value="signup" className="p-6">
-            <Form {...signupForm}>
-              <form onSubmit={signupForm.handleSubmit(onSignup)} className="space-y-4">
+
+          <TabsContent value="activate" className="p-6">
+            <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+              First-time access — set a password for an email address that an existing admin has already added to the user list.
+            </p>
+            <Form {...activateForm}>
+              <form onSubmit={activateForm.handleSubmit(onActivate)} className="space-y-4">
                 <FormField
-                  control={signupForm.control}
+                  control={activateForm.control}
                   name="email"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
-                      <FormControl><Input placeholder="volunteer@bhhub.co.uk" {...field} /></FormControl>
+                      <FormControl><Input placeholder="you@bhhub.co.uk" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <FormField
-                  control={signupForm.control}
+                  control={activateForm.control}
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Password</FormLabel>
+                      <FormLabel>Choose a Password</FormLabel>
                       <FormControl><Input type="password" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <FormField
-                  control={signupForm.control}
+                  control={activateForm.control}
                   name="confirmPassword"
                   render={({ field }) => (
                     <FormItem>
@@ -174,14 +210,14 @@ export default function LoginPage() {
                   )}
                 />
                 <Button type="submit" className="w-full gap-2" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                  Create Account
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                  Activate Account
                 </Button>
               </form>
             </Form>
           </TabsContent>
         </Tabs>
-        
+
         <CardFooter className="bg-muted/50 p-4 border-t">
           <p className="text-xs text-center w-full text-muted-foreground uppercase tracking-widest font-bold">
             Authorized Personnel Only

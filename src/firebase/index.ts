@@ -2,7 +2,15 @@
 
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import {
+  getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  inMemoryPersistence,
+  type Auth,
+} from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
@@ -32,10 +40,36 @@ export function initializeFirebase() {
   return getSdks(getApp());
 }
 
+// Resolve Auth with an explicit persistence chain so admin sign-ins
+// survive tab close and browser restart. IndexedDB is tried first
+// because it is more resilient than localStorage under Safari's
+// Intelligent Tracking Prevention; the SDK falls down the chain
+// automatically when a tier isn't available.
+function resolveAuth(firebaseApp: FirebaseApp): Auth {
+  if (typeof window === 'undefined') {
+    return getAuth(firebaseApp);
+  }
+  try {
+    return initializeAuth(firebaseApp, {
+      persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+        inMemoryPersistence,
+      ],
+    });
+  } catch {
+    // Auth was already initialized for this app (e.g. a duplicate
+    // provider mount under React strict mode) — return the existing
+    // instance and keep its persistence as-is.
+    return getAuth(firebaseApp);
+  }
+}
+
 export function getSdks(firebaseApp: FirebaseApp) {
   return {
     firebaseApp,
-    auth: getAuth(firebaseApp),
+    auth: resolveAuth(firebaseApp),
     firestore: getFirestore(firebaseApp)
   };
 }
