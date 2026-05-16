@@ -39,15 +39,47 @@ const WELCOME_MESSAGE: Message = {
   text: "Hi! I'm the Hire Assistant for Bishops Hull Hub. I can help with questions about hiring the hall — availability, pricing, facilities, and more. What would you like to know?",
 };
 
+const NUDGE_DISMISSED_KEY = 'bhhub-hire-chat-nudge-dismissed';
+const NUDGE_DELAY_MS = 4000;
+
 export default function HireChatbot() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showNudge, setShowNudge] = useState(false);
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { firestore } = useFirebase();
   const submittingRef = useRef(false);
+
+  // Show a one-off "ask any questions here" nudge to first-time visitors so
+  // the chat button is discoverable. Dismissal is persisted, so returning
+  // visitors and anyone who already engaged with the chat won't see it again.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (window.localStorage.getItem(NUDGE_DISMISSED_KEY)) return;
+    } catch {
+      // localStorage unavailable (private mode etc.) — still safe to show once per page load
+    }
+    const t = window.setTimeout(() => setShowNudge(true), NUDGE_DELAY_MS);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  const dismissNudge = useCallback(() => {
+    setShowNudge(false);
+    try {
+      window.localStorage.setItem(NUDGE_DISMISSED_KEY, '1');
+    } catch {
+      // Ignore — best effort persistence.
+    }
+  }, []);
+
+  // Opening the chat counts as engaging with it — hide the nudge for good.
+  useEffect(() => {
+    if (open && showNudge) dismissNudge();
+  }, [open, showNudge, dismissNudge]);
 
   // Lock body scroll on mobile when the panel is open so the page
   // doesn't scroll behind the chat overlay.
@@ -295,6 +327,51 @@ export default function HireChatbot() {
         </div>
       )}
 
+      {/* Discoverability nudge — small speech bubble pointing at the trigger
+          button on first visit. Mobile: appears to the right of the button
+          (which is bottom-left). Desktop: appears to the left of the button
+          (which is bottom-right). */}
+      {showNudge && !open && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={cn(
+            'fixed z-50 max-w-[220px] animate-in fade-in slide-in-from-bottom-2 duration-500',
+            'bottom-[26px]',
+            // Mobile: chat button is at left-4, so place the bubble to its right
+            'left-[76px] md:left-auto',
+            // Desktop: chat button is at right-6, so place the bubble to its left
+            'md:right-[76px]'
+          )}
+        >
+          <div className="relative bg-primary text-primary-foreground rounded-2xl shadow-xl shadow-primary/30 px-3.5 py-2.5 pr-8">
+            <p className="text-xs font-semibold leading-tight">Ask any questions here</p>
+            <p className="text-[10px] opacity-80 leading-tight mt-0.5">
+              I can answer hire questions or take a booking enquiry for you.
+            </p>
+            <button
+              type="button"
+              onClick={dismissNudge}
+              aria-label="Dismiss"
+              className="absolute top-1.5 right-1.5 rounded-full p-0.5 hover:bg-white/20 transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </button>
+            {/* Tail pointing at the trigger button */}
+            <span
+              aria-hidden
+              className={cn(
+                'absolute top-1/2 -translate-y-1/2 w-0 h-0 border-y-[6px] border-y-transparent',
+                // Mobile: tail on the left of the bubble (button is to the left)
+                '-left-1.5 border-r-[8px] border-r-primary',
+                // Desktop: flip — tail on the right of the bubble (button is to the right)
+                'md:left-auto md:-right-1.5 md:border-r-0 md:border-l-[8px] md:border-l-primary'
+              )}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Trigger button */}
       {/* On mobile: left side to avoid collision with the Book Now FAB (right side) */}
       {/* On desktop (md+): right side */}
@@ -307,13 +384,23 @@ export default function HireChatbot() {
           // Mobile: left side
           'left-4 md:left-auto',
           // Desktop: right side
-          'md:right-6'
+          'md:right-6',
+          // Gentle attention-grabber when the nudge bubble is visible
+          showNudge && !open && 'animate-pulse-ring'
         )}
       >
+        {/* Pulsing ring overlay while the nudge is showing */}
+        {showNudge && !open && (
+          <span
+            aria-hidden
+            className="absolute inset-0 rounded-full bg-primary/40 animate-ping"
+            style={{ animationDuration: '1.8s' }}
+          />
+        )}
         {open ? (
           <X className="h-5 w-5" />
         ) : (
-          <MessageCircle className="h-6 w-6" />
+          <MessageCircle className="h-6 w-6 relative" />
         )}
       </button>
     </>

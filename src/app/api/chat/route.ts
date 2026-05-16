@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { hireChatbotFlow } from '@/ai/flows/hire-chatbot-flow';
 import { getServerFirestore } from '@/lib/firestore-server';
+import { SITE_CONTACT } from '@/lib/site-contact';
 
 const VENUE_FACTS = `
 VENUE: Bishops Hull Hub
@@ -9,6 +10,11 @@ Address: Bishops Hull Playing Field, Bishops Hull Hill, Taunton, TA1 5EB
 Bookings contact: bhhubbookings@gmail.com (aim to reply within 3 working days)
 General enquiries: info@bhhub.co.uk
 Website hire page: https://bhhub.co.uk/hire
+
+ON-SITE CONTACT (DURING A HIRE — NOT FOR NEW BOOKINGS):
+${SITE_CONTACT.name} on ${SITE_CONTACT.displayPhone}.
+This number is for hirers who are already on-site and have an issue during their hire (access, facilities, anything urgent).
+IMPORTANT: Never give this number out as a "booking contact". If someone wants to make or change a booking, point them to bhhubbookings@gmail.com or the website form at /hire#booking-form. Only share ${SITE_CONTACT.name}'s number when the person is asking about an issue during a hire, or what to do if there's a problem on the day.
 
 HALL SPECIFICATIONS:
 - Main hall: 14.8m × 9m, vaulted sloping ceiling (maximum height 4m), capacity up to 110 people
