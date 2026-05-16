@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import FAQItem from '@/components/FAQItem';
 import FAQCategoryNav from '@/components/FAQCategoryNav';
-import { Search, X, Loader2 } from 'lucide-react';
+import { Search, X, Loader2, Phone } from 'lucide-react';
+import { SITE_CONTACT } from '@/lib/site-contact';
 import HireJourneyAccordion from '@/components/HireJourneyAccordion';
 import { useFirebase } from '@/firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
@@ -373,6 +374,24 @@ export default function FAQClient() {
           <p className="text-sm opacity-50">
             bhhubbookings@gmail.com · We aim to reply within 3 working days
           </p>
+
+          <div className="mt-6 pt-6 border-t border-white/20 max-w-xl mx-auto">
+            <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest opacity-75 mb-2">
+              <Phone className="h-3.5 w-3.5" /> Already On-Site?
+            </div>
+            <p className="text-sm opacity-90 mb-3">
+              For issues <span className="font-bold">during your hire</span>, call {SITE_CONTACT.name}:
+            </p>
+            <a
+              href={SITE_CONTACT.telHref}
+              className="inline-block text-2xl font-bold tracking-wide bg-white/15 border border-white/30 rounded-xl px-6 py-3 hover:bg-white/25 transition-colors"
+            >
+              {SITE_CONTACT.displayPhone}
+            </a>
+            <p className="text-xs opacity-60 mt-3 font-medium">
+              {SITE_CONTACT.notForBookings}
+            </p>
+          </div>
         </div>
       </section>
     </>

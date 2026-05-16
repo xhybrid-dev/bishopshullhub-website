@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { MapPin, Navigation, ExternalLink, ParkingCircle, Mail, AlertTriangle, Lock } from "lucide-react";
+import { MapPin, Navigation, ExternalLink, ParkingCircle, Mail, AlertTriangle, Lock, Phone } from "lucide-react";
+import { SITE_CONTACT } from "@/lib/site-contact";
 import { FindUsMap } from "@/components/FindUsMap";
 import { GettingHereTabs } from "@/components/GettingHereTabs";
 import { CopyAddressButton } from "@/components/CopyAddressButton";
@@ -241,6 +242,27 @@ export default function FindUsPage() {
                 >
                   bhhubbookings@gmail.com
                 </a>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 rounded-3xl border-2 border-amber-300 p-6 flex items-start gap-4">
+              <div className="w-11 h-11 rounded-2xl bg-amber-200 flex items-center justify-center flex-shrink-0">
+                <Phone className="h-5 w-5 text-amber-800" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground mb-1">Site Contact (During Your Hire)</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  If you&apos;re already on-site and have an issue (access, facilities, anything urgent), call {SITE_CONTACT.name}.
+                </p>
+                <a
+                  href={SITE_CONTACT.telHref}
+                  className="text-base font-bold text-amber-900 hover:underline"
+                >
+                  {SITE_CONTACT.name} — {SITE_CONTACT.displayPhone}
+                </a>
+                <p className="text-xs text-amber-800 mt-2 font-medium">
+                  {SITE_CONTACT.notForBookings}
+                </p>
               </div>
             </div>
           </div>

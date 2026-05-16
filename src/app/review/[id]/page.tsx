@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useFirebase, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { Loader2, ShieldCheck, CheckCircle2, Clock, Calendar, User, Info, AlertTriangle } from 'lucide-react';
+import { Loader2, ShieldCheck, CheckCircle2, Clock, Calendar, User, Info, AlertTriangle, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,7 @@ export default function SecurityReviewPage({ params }: { params: Promise<{ id: s
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState(false);
   const [hasUpdated, setHasUpdated] = useState(false);
+  const [comments, setComments] = useState('');
 
   const enquiryRef = useMemoFirebase(() => doc(firestore, 'booking_enquiries', id), [firestore, id]);
   const { data: enquiry, isLoading, error } = useDoc(enquiryRef);
@@ -26,9 +27,23 @@ export default function SecurityReviewPage({ params }: { params: Promise<{ id: s
     setIsUpdating(true);
     try {
       if (!enquiryRef) return;
-      await updateDoc(enquiryRef, { status: 'Reviewed' });
+      const trimmed = comments.trim();
+      const update: Record<string, any> = {
+        status: 'Reviewed',
+        securityReviewedAt: new Date().toISOString(),
+      };
+      if (trimmed) {
+        update.securityComments = trimmed;
+        update.securityCommentsAcknowledged = false;
+      }
+      await updateDoc(enquiryRef, update);
       setHasUpdated(true);
-      toast({ title: "Review Submitted", description: "This booking has been marked as Reviewed." });
+      toast({
+        title: "Review Submitted",
+        description: trimmed
+          ? "Your comments have been sent to the booking manager."
+          : "This booking has been marked as Reviewed.",
+      });
     } catch (err) {
       console.error(err);
       toast({ variant: "destructive", title: "Action Failed", description: "You may not have permission to perform this update, or the booking is already confirmed." });
@@ -148,15 +163,33 @@ export default function SecurityReviewPage({ params }: { params: Promise<{ id: s
 
           <div className="pt-8 border-t space-y-6">
             <div className="space-y-2">
+              <h3 className="font-bold text-primary flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" /> Comments for the Booking Manager
+                <span className="text-[10px] font-normal uppercase tracking-wider text-muted-foreground">(Optional)</span>
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                If the Booking Manager needs to action anything before the hire is confirmed — for example a change to the time, attendance numbers, or specific requirements — please note it here. These comments will appear prominently against the booking in the admin portal.
+              </p>
+              <textarea
+                value={comments}
+                onChange={e => setComments(e.target.value)}
+                rows={4}
+                placeholder="e.g. Please ask the hirer to bring the start time forward by 30 minutes, or confirm stewarding arrangements for the expected attendance."
+                disabled={isUpdating}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
+              />
+            </div>
+
+            <div className="space-y-2">
               <h3 className="font-bold text-primary">Security Confirmation</h3>
               <p className="text-sm text-muted-foreground">
-                By clicking "Approve Event", you are confirming that the Security Team is happy with the type of event and estimated attendance for this date.
+                By clicking "Approve Event", you are confirming that the Security Team is happy with the type of event and estimated attendance for this date. Any comments above will be sent to the booking manager.
               </p>
             </div>
-            
+
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button 
-                onClick={handleApprove} 
+              <Button
+                onClick={handleApprove}
                 className="flex-1 h-14 text-lg bg-primary hover:bg-primary/90 gap-2 shadow-lg"
                 disabled={isUpdating}
               >

@@ -50,7 +50,9 @@ service cloud.firestore {
       allow create: if isSignedIn() && matchesPathId(enquiryId);
       
       // Update: Admin can update anything.
-      // Security Team (public) can ONLY update the 'status' to 'Reviewed'.
+      // Security Team (public) can set status to 'Reviewed' and, in the same write,
+      // attach review comments (securityComments, securityReviewedAt,
+      // securityCommentsAcknowledged) that surface back to the booking manager.
       // Hirer (public) can submit hire confirmation if confirmationStatus moves Sent -> Submitted.
       allow update: if (isExistingAdmin() && idIsImmutable()) || (
         request.resource.data.status == 'Reviewed' &&

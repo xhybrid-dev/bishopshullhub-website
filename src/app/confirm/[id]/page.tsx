@@ -9,10 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useFirebase, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { Loader2, CheckCircle2, Calendar, Clock, AlertTriangle, FileSignature, Eraser, Lock } from 'lucide-react';
+import { Loader2, CheckCircle2, Calendar, Clock, AlertTriangle, FileSignature, Eraser, Lock, Phone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { submitHireConfirmationAction } from '@/app/actions/send-email';
+import { SITE_CONTACT } from '@/lib/site-contact';
 
 const HIRE_CONDITIONS = [
   'I have read, understood and agree with the terms of the Hire Agreement.',
@@ -224,21 +225,44 @@ export default function HireConfirmationPage({ params }: { params: Promise<{ id:
   if (submitted || enquiry.confirmationStatus === 'Submitted') {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
-        <Card className="max-w-md w-full border-none shadow-2xl">
-          <CardHeader className="text-center space-y-2">
-            <div className="mx-auto p-4 bg-green-100 text-green-600 rounded-full w-fit">
-              <CheckCircle2 className="h-12 w-12" />
+        <div className="w-full max-w-md space-y-4">
+          <Card className="border-none shadow-2xl">
+            <CardHeader className="text-center space-y-2">
+              <div className="mx-auto p-4 bg-green-100 text-green-600 rounded-full w-fit">
+                <CheckCircle2 className="h-12 w-12" />
+              </div>
+              <CardTitle className="text-2xl font-headline text-primary">Hire Confirmed</CardTitle>
+              <CardDescription>
+                Thank you. We've received your signed hire agreement and bank details.
+                You'll get a confirmation email shortly, and we'll arrange your invoice for payment.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-center pt-2">
+              <Button asChild variant="outline"><Link href="/">Back to Home</Link></Button>
+            </CardContent>
+          </Card>
+
+          <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 flex items-start gap-3 shadow-md">
+            <div className="w-10 h-10 rounded-xl bg-amber-200 flex items-center justify-center flex-shrink-0">
+              <Phone className="h-5 w-5 text-amber-900" />
             </div>
-            <CardTitle className="text-2xl font-headline text-primary">Hire Confirmed</CardTitle>
-            <CardDescription>
-              Thank you. We've received your signed hire agreement and bank details.
-              You'll get a confirmation email shortly, and we'll arrange your invoice for payment.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center pt-2">
-            <Button asChild variant="outline"><Link href="/">Back to Home</Link></Button>
-          </CardContent>
-        </Card>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-900">Save This Number</p>
+              <p className="text-sm text-amber-950 mt-1">
+                For any issues <span className="font-bold">during your hire</span>, call {SITE_CONTACT.name}:
+              </p>
+              <a
+                href={SITE_CONTACT.telHref}
+                className="inline-block mt-2 text-lg font-bold text-amber-900 hover:underline"
+              >
+                {SITE_CONTACT.displayPhone}
+              </a>
+              <p className="text-[11px] text-amber-800 mt-1.5 font-medium">
+                {SITE_CONTACT.notForBookings}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -419,7 +443,30 @@ export default function HireConfirmationPage({ params }: { params: Promise<{ id:
         </CardContent>
       </Card>
 
-      <div className="text-center mt-8 text-xs text-muted-foreground">
+      <div className="max-w-2xl mx-auto mt-6">
+        <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-200 flex items-center justify-center flex-shrink-0">
+            <Phone className="h-5 w-5 text-amber-900" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-900">Site Contact — During Your Hire</p>
+            <p className="text-sm text-amber-950 mt-1">
+              If you have any issues on the day of your hire (access, facilities, anything on-site), call {SITE_CONTACT.name}:
+            </p>
+            <a
+              href={SITE_CONTACT.telHref}
+              className="inline-block mt-2 text-lg font-bold text-amber-900 hover:underline"
+            >
+              {SITE_CONTACT.displayPhone}
+            </a>
+            <p className="text-[11px] text-amber-800 mt-1.5 font-medium">
+              {SITE_CONTACT.notForBookings}. For booking enquiries, please email bhhubbookings@gmail.com.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="text-center mt-6 text-xs text-muted-foreground">
         Bishops Hull Hub &bull; bhhubbookings@gmail.com
       </div>
     </div>

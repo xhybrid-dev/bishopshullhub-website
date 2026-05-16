@@ -1,5 +1,7 @@
 'use server';
 
+import { SITE_CONTACT } from '@/lib/site-contact';
+
 const HIRE_CONDITIONS = [
   'I have read, understood and agree with the terms of the Hire Agreement.',
   'I have read, understood and accept the Hub Privacy Statement.',
@@ -217,6 +219,13 @@ ${hireConditionsUrl}
 
 If you have any questions or queries please get in contact.
 
+----------------------------------------
+SITE CONTACT — DURING YOUR HIRE
+${SITE_CONTACT.name}: ${SITE_CONTACT.displayPhone}
+For any on-site issues during your hire (access, facilities, anything urgent).
+${SITE_CONTACT.notForBookings}.
+----------------------------------------
+
 Kind regards,
 Bishops Hull Hub
 Booking enquiries: bhhubbookings@gmail.com`;
@@ -240,6 +249,14 @@ Booking enquiries: bhhubbookings@gmail.com`;
           </ol>
           <p style="margin:0 0 18px;">The full <a href="${hireConditionsUrl}" style="color:#1a4d46;font-weight:bold;">conditions of hire</a> can also be found on our website.</p>
           <p style="margin:0 0 4px;">If you have any questions or queries please get in contact.</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border:2px solid #fcd34d;border-radius:8px;margin:24px 0 0;">
+            <tr><td style="padding:18px 22px;font-family:Arial,sans-serif;">
+              <p style="margin:0 0 6px;font-size:11px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;color:#78350f;">Site Contact — During Your Hire</p>
+              <p style="margin:0 0 8px;font-size:14px;color:#451a03;">For any issues on the day (access, facilities, anything on-site), call <strong>${SITE_CONTACT.name}</strong>:</p>
+              <p style="margin:0;"><a href="${SITE_CONTACT.telHref}" style="display:inline-block;font-size:20px;font-weight:bold;color:#78350f;text-decoration:none;">${SITE_CONTACT.displayPhone}</a></p>
+              <p style="margin:8px 0 0;font-size:11px;font-weight:bold;color:#92400e;">${SITE_CONTACT.notForBookings}</p>
+            </td></tr>
+          </table>
         </td></tr>
         <tr><td style="padding:0 40px 36px;color:#1e293b;font-size:16px;line-height:1.7;">
           <p style="margin:0;">Kind regards,</p>

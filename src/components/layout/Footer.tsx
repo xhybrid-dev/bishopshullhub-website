@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Mail, MapPin, Facebook, Instagram } from 'lucide-react';
+import { Mail, MapPin, Facebook, Instagram, Phone } from 'lucide-react';
+import { SITE_CONTACT } from '@/lib/site-contact';
 
 export default function Footer() {
   return (
@@ -34,6 +35,20 @@ export default function Footer() {
                 >
                   bhhubbookings@gmail.com
                 </a>
+              </li>
+              <li className="flex items-start gap-3 text-sm">
+                <Phone className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <div className="text-background/70">
+                  <a
+                    href={SITE_CONTACT.telHref}
+                    className="hover:text-background transition-colors hover:underline font-medium"
+                  >
+                    {SITE_CONTACT.name} — {SITE_CONTACT.displayPhone}
+                  </a>
+                  <span className="block text-[11px] text-background/50 mt-0.5">
+                    {SITE_CONTACT.notForBookings}
+                  </span>
+                </div>
               </li>
             </ul>
           </div>

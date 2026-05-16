@@ -1,8 +1,9 @@
 'use client';
 
-import { Mail, ChevronDown } from 'lucide-react';
+import { Mail, ChevronDown, Phone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CAT_COLORS } from '@/app/faq/FAQClient';
+import { SITE_CONTACT } from '@/lib/site-contact';
 
 type CategoryId = 'all' | 'venue' | 'hire' | 'access' | 'safety' | 'rules';
 
@@ -111,6 +112,22 @@ export default function FAQCategoryNav({
           >
             <Mail className="h-3.5 w-3.5 flex-shrink-0" />
             Ask a question
+          </a>
+
+          <a
+            href={SITE_CONTACT.telHref}
+            className="block mt-2 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-300 hover:bg-amber-100 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-amber-900 text-sm font-semibold">
+              <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+              On-site issue? Call {SITE_CONTACT.name}
+            </div>
+            <div className="text-xs font-bold text-amber-900 mt-0.5 ml-5">
+              {SITE_CONTACT.displayPhone}
+            </div>
+            <div className="text-[10px] text-amber-700 mt-0.5 ml-5 leading-tight">
+              {SITE_CONTACT.notForBookings}
+            </div>
           </a>
         </div>
       </div>

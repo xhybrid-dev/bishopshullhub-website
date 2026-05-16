@@ -12,17 +12,24 @@ import { useRouter, usePathname } from 'next/navigation';
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const { user, auth } = useFirebase();
+  const { user, auth, isUserLoading } = useFirebase();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
     setMounted(true);
-    // Ensure we always have an identity for Firestore rules
+  }, []);
+
+  useEffect(() => {
+    // Wait for the persisted-session check to complete before deciding to
+    // sign in anonymously. Otherwise an admin who just refreshed the page
+    // would get clobbered by anonymous auth before their stored token has
+    // a chance to rehydrate.
+    if (isUserLoading) return;
     if (!user && auth) {
       initiateAnonymousSignIn(auth);
     }
-  }, [user, auth]);
+  }, [user, auth, isUserLoading]);
 
   const navLinks = [
     { name: 'Home', href: '/' },

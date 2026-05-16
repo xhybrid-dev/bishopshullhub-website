@@ -62,7 +62,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 export default function HirePage() {
   const { toast } = useToast();
-  const { firestore, auth, user } = useFirebase();
+  const { firestore, auth, user, isUserLoading } = useFirebase();
   const [step, setStep] = useState(1);
   const [minDateStr, setMinDateStr] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -73,14 +73,20 @@ export default function HirePage() {
   const totalSteps = 5;
 
   useEffect(() => {
-    if (!user && auth) {
-      initiateAnonymousSignIn(auth);
-    }
-
     const date = new Date();
     date.setDate(date.getDate() + 14);
     setMinDateStr(date.toISOString().split('T')[0]);
-  }, [user, auth]);
+  }, []);
+
+  useEffect(() => {
+    // Don't kick off anonymous sign-in until the persisted-session check
+    // has completed — otherwise we race against the admin's stored token
+    // being rehydrated from IndexedDB and end up logging them out.
+    if (isUserLoading) return;
+    if (!user && auth) {
+      initiateAnonymousSignIn(auth);
+    }
+  }, [user, auth, isUserLoading]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),

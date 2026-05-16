@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, LayoutDashboard, LogOut, Inbox, User, Mail, Phone, Clock, Calendar, CalendarDays, ShieldAlert, Key, LogIn, FileText, CheckCircle2, MoreVertical, ArrowRight, XCircle, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, UserPlus, Trash2, Send, AlertCircle, AlertTriangle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle, RefreshCw } from 'lucide-react';
+import { Loader2, LayoutDashboard, LogOut, Inbox, Mail, Calendar, CalendarDays, ShieldAlert, FileText, CheckCircle2, MoreVertical, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, Trash2, Send, AlertTriangle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle, RefreshCw, MessageSquare } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, useDoc, setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, orderBy, updateDoc, onSnapshot } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,7 @@ import { getLiveCalendarEventsAction, type LiveEvent } from '@/app/actions/get-c
 import type { ClashingEvent } from '@/app/actions/check-availability';
 import { EnquiryCalendarView } from '@/components/admin/EnquiryCalendarView';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { format, isWithinInterval, addDays, startOfToday, parseISO, isSameDay } from 'date-fns';
+import { format, startOfToday, parseISO, isSameDay } from 'date-fns';
 
 const STATUS_COLUMNS = [
   { id: 'Pending', label: 'Enquiry Received', color: 'bg-amber-500', icon: Clock3 },
@@ -56,8 +56,8 @@ const FAQ_CAT_LABELS: Record<string, string> = {
   safety: 'Safety', rules: 'Rules & Policies',
 };
 const DEFAULT_FAQS = [
-  { cat: 'hire',   q: "How do I contact someone when there's an issue during my hire?",           a: "Please call the number displayed above the notice board labelled 'On-Duty Contact number'.", order: 1 },
-  { cat: 'access', q: 'What is the height of the gate height barrier?',                           a: 'The height barrier is 2m high. If you expect vehicles that will exceed this height, please contact the booking manager or On-Duty contact number.', order: 2 },
+  { cat: 'hire',   q: "How do I contact someone when there's an issue during my hire?",           a: "For any issues during your hire, please call Julie on 07864 241376. This number is for on-site enquiries only — please do not use it for new bookings.", order: 1 },
+  { cat: 'access', q: 'What is the height of the gate height barrier?',                           a: 'The height barrier is 2m high. If you expect vehicles that will exceed this height, please contact the booking manager. For on-the-day access issues, call Julie on 07864 241376 (site enquiries only — not for new bookings).', order: 2 },
   { cat: 'hire',   q: 'What do I do with any rubbish generated during my hire?',                  a: 'We ask all hirers to take any rubbish generated during their hire away with them to keep the Hub clean for everyone.', order: 3 },
   { cat: 'venue',  q: 'What is the total number of people allowed in the hall?',                  a: 'The maximum capacity for the hall is 110 people.', order: 4 },
   { cat: 'rules',  q: "Is there a 'Premises' licence for the Hub?",                               a: 'No, the Hub does not hold a general premises licence.', order: 5 },
@@ -146,21 +146,6 @@ export default function AdminPortal() {
         return false;
       }
     }).sort((a, b) => b.dateRequired.localeCompare(a.dateRequired));
-  }, [enquiries]);
-
-  const upcomingBookings = useMemo(() => {
-    if (!enquiries) return [];
-    const today = startOfToday();
-    const nextWeek = addDays(today, 7);
-    return enquiries.filter(e => {
-      if (e.status !== 'Confirmed') return false;
-      try {
-        const eventDate = parseISO(e.dateRequired);
-        return isWithinInterval(eventDate, { start: today, end: nextWeek });
-      } catch {
-        return false;
-      }
-    }).sort((a, b) => a.dateRequired.localeCompare(b.dateRequired));
   }, [enquiries]);
 
   // Pull the live Hallmaster feed once admin access is confirmed,
@@ -266,6 +251,19 @@ export default function AdminPortal() {
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not save changes.' });
       return false;
+    }
+  };
+
+  const handleAcknowledgeSecurityComments = async (enquiryId: string) => {
+    try {
+      const docRef = doc(firestore, 'booking_enquiries', enquiryId);
+      await updateDoc(docRef, {
+        securityCommentsAcknowledged: true,
+        securityCommentsAcknowledgedAt: new Date().toISOString(),
+      });
+      toast({ title: 'Comments Acknowledged', description: 'The security note has been marked as actioned.' });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not acknowledge the security comments.' });
     }
   };
 
@@ -414,53 +412,51 @@ export default function AdminPortal() {
           <Button variant="outline" onClick={handleLogout} className="gap-2"><LogOut className="h-4 w-4" /> Sign Out</Button>
         </div>
 
-        {/* Upcoming Bookings Summary */}
-        <div className="mb-12">
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar className="h-5 w-5 text-primary" />
-            <h2 className="text-xl font-headline font-bold text-primary">Upcoming Bookings (Next 7 Days)</h2>
-          </div>
-          {upcomingBookings.length > 0 ? (
-            <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-              {upcomingBookings.map(e => (
-                <Card key={e.id} className="min-w-[280px] bg-white border-none shadow-md">
-                  <CardHeader className="p-4 pb-0">
-                    <Badge variant="secondary" className="w-fit mb-2">{format(parseISO(e.dateRequired), 'EEEE, MMM do')}</Badge>
-                    <CardTitle className="text-sm font-bold truncate">{e.typeOfEvent}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-2">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {e.startTime}</span>
-                      <span className="flex items-center gap-1"><User className="h-3 w-3" /> {e.name}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-white/50 border border-dashed rounded-2xl p-6 text-center text-muted-foreground text-sm">
-              No confirmed bookings in the next 7 days.
-            </div>
-          )}
-        </div>
-
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <div className="overflow-x-auto no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
-            <TabsList className="bg-white border p-1 rounded-2xl h-14 shadow-sm w-max">
-              <TabsTrigger value="enquiries" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
-                <Inbox className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Booking Enquiries</span>
+          <TabsList className="bg-transparent p-0 rounded-none w-full flex flex-col gap-3 h-auto">
+            {/* Primary actions — Workflow Management & Deposit Returns */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+              <TabsTrigger
+                value="enquiries"
+                className="group flex items-center justify-start gap-4 h-20 px-5 rounded-2xl border bg-white shadow-sm hover:shadow-md hover:border-primary/30 transition-all data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-primary"
+              >
+                <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-data-[state=active]:bg-white/20 group-data-[state=active]:text-white shrink-0">
+                  <Inbox className="h-6 w-6" />
+                </div>
+                <div className="text-left min-w-0">
+                  <div className="font-bold text-base leading-tight">Workflow Management</div>
+                  <div className="text-xs opacity-70 mt-0.5">Booking enquiries</div>
+                </div>
               </TabsTrigger>
-              <TabsTrigger value="security" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
-                <Users className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Users</span>
+              <TabsTrigger
+                value="deposits"
+                className="group flex items-center justify-start gap-4 h-20 px-5 rounded-2xl border bg-white shadow-sm hover:shadow-md hover:border-primary/30 transition-all data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:border-primary"
+              >
+                <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-data-[state=active]:bg-white/20 group-data-[state=active]:text-white shrink-0">
+                  <Banknote className="h-6 w-6" />
+                </div>
+                <div className="text-left min-w-0">
+                  <div className="font-bold text-base leading-tight">Deposit Returns</div>
+                  <div className="text-xs opacity-70 mt-0.5">Process pending refunds</div>
+                </div>
               </TabsTrigger>
-              <TabsTrigger value="deposits" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
-                <Banknote className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Deposit Details</span>
+            </div>
+            {/* Secondary actions — Users & FAQs */}
+            <div className="flex gap-2 justify-end">
+              <TabsTrigger
+                value="security"
+                className="rounded-xl h-9 px-3.5 text-xs font-medium gap-1.5 bg-white border shadow-sm hover:border-primary/30 transition-all data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:border-primary"
+              >
+                <Users className="h-3.5 w-3.5" /> Users
               </TabsTrigger>
-              <TabsTrigger value="faqs" className="rounded-xl px-3 sm:px-6 h-full whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white">
-                <HelpCircle className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">FAQs</span>
+              <TabsTrigger
+                value="faqs"
+                className="rounded-xl h-9 px-3.5 text-xs font-medium gap-1.5 bg-white border shadow-sm hover:border-primary/30 transition-all data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:border-primary"
+              >
+                <HelpCircle className="h-3.5 w-3.5" /> FAQs
               </TabsTrigger>
-            </TabsList>
-          </div>
+            </div>
+          </TabsList>
 
           <TabsContent value="enquiries" className="space-y-8 animate-in fade-in">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
@@ -525,7 +521,7 @@ export default function AdminPortal() {
                         </div>
                         <div className="flex flex-col gap-4 bg-muted/20 p-3 rounded-2xl min-h-[400px] border-2 border-dashed border-muted">
                           {items.map(e => (
-                            <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} />
+                            <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} />
                           ))}
                         </div>
                       </div>
@@ -534,7 +530,7 @@ export default function AdminPortal() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {enquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} isList />)}
+                  {enquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} isList />)}
                 </div>
               )
             ) : (
@@ -795,11 +791,14 @@ export default function AdminPortal() {
   );
 }
 
-function KanbanCard({ enquiry, clashes, onUpdateStatus, onSendToSecurity, onSendConfirmation, onEdit, isList }: { enquiry: any, clashes?: ClashingEvent[], onUpdateStatus: (id: string, s: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onEdit: (e: any) => void, isList?: boolean }) {
+function KanbanCard({ enquiry, clashes, onUpdateStatus, onSendToSecurity, onSendConfirmation, onEdit, onAcknowledgeSecurityComments, isList }: { enquiry: any, clashes?: ClashingEvent[], onUpdateStatus: (id: string, s: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onEdit: (e: any) => void, onAcknowledgeSecurityComments: (id: string) => void, isList?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isSendingConfirm, setIsSendingConfirm] = useState(false);
+  const [isAcknowledging, setIsAcknowledging] = useState(false);
   const hasClash = (clashes?.length ?? 0) > 0;
+  const securityComments: string | undefined = enquiry.securityComments;
+  const hasPendingSecurityComments = !!(securityComments && securityComments.trim()) && enquiry.securityCommentsAcknowledged !== true;
 
   const handleReviewClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -815,12 +814,46 @@ function KanbanCard({ enquiry, clashes, onUpdateStatus, onSendToSecurity, onSend
     setIsSendingConfirm(false);
   };
 
+  const handleAcknowledgeClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsAcknowledging(true);
+    await onAcknowledgeSecurityComments(enquiry.id);
+    setIsAcknowledging(false);
+  };
+
   const confirmationStatus = enquiry.confirmationStatus as ('NotSent' | 'Sent' | 'Submitted' | undefined);
   const showConfirmButton = enquiry.status === 'Reviewed' || enquiry.status === 'Confirmed';
 
   return (
-    <Card className={cn("border shadow-sm hover:shadow-md transition-all bg-white cursor-pointer overflow-hidden", isExpanded && "ring-2 ring-primary", hasClash && "border-red-400 bg-red-50/40")} onClick={() => setIsExpanded(!isExpanded)}>
+    <Card className={cn("border shadow-sm hover:shadow-md transition-all bg-white cursor-pointer overflow-hidden", isExpanded && "ring-2 ring-primary", hasClash && "border-red-400 bg-red-50/40", hasPendingSecurityComments && "border-amber-500 ring-2 ring-amber-400 bg-amber-50/40")} onClick={() => setIsExpanded(!isExpanded)}>
       <div className="p-4 space-y-3">
+        {hasPendingSecurityComments && (
+          <div className="rounded-md border-2 border-amber-500 bg-amber-100 p-2.5 space-y-2 animate-in fade-in">
+            <div className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-amber-900">
+              <MessageSquare className="h-3.5 w-3.5" />
+              Action Required — Security Team Comments
+            </div>
+            <p className="text-[11px] text-amber-950 leading-relaxed whitespace-pre-wrap break-words">
+              {securityComments}
+            </p>
+            <Button
+              variant="default"
+              size="sm"
+              className="w-full h-7 text-[10px] gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleAcknowledgeClick}
+              disabled={isAcknowledging}
+            >
+              {isAcknowledging ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+              Mark as Actioned
+            </Button>
+          </div>
+        )}
+        {!hasPendingSecurityComments && securityComments && securityComments.trim() && (
+          <div className="rounded-md border border-muted bg-muted/40 px-2 py-1.5 flex items-start gap-1.5 text-[10px] text-muted-foreground">
+            <CheckCircle2 className="h-3 w-3 shrink-0 mt-0.5 text-green-600" />
+            <span>Security note actioned. <span className="italic opacity-80">"{securityComments}"</span></span>
+          </div>
+        )}
         {hasClash && (
           <div className="flex items-start gap-1.5 text-[10px] font-bold text-red-700 bg-red-100 border border-red-200 rounded-md px-2 py-1.5">
             <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
