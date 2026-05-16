@@ -1,16 +1,37 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageCircle, X, Send, Loader2, Bot } from 'lucide-react';
+import { MessageCircle, X, Send, Loader2, Bot, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { useFirebase, setDocumentNonBlocking } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import { sendEnquiryEmailAction } from '@/app/actions/send-email';
 
 type MessageRole = 'user' | 'model';
+type MessageKind = 'text' | 'system';
 
 interface Message {
   role: MessageRole;
   text: string;
+  kind?: MessageKind; // 'system' = stylised confirmation/error pill, not part of LLM history
+}
+
+interface PreparedSubmission {
+  name: string;
+  emailAddress: string;
+  phoneNumber: string;
+  postalAddress: string;
+  postcode: string;
+  preferredContact: 'Email' | 'Phone';
+  dateRequired: string;
+  startTime: string;
+  endTime: string;
+  typeOfEvent: string;
+  estimatedAttendance: number;
+  additionalRequirements: string;
+  source: 'chat';
 }
 
 const WELCOME_MESSAGE: Message = {
@@ -25,6 +46,8 @@ export default function HireChatbot() {
   const [loading, setLoading] = useState(false);
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { firestore } = useFirebase();
+  const submittingRef = useRef(false);
 
   // Lock body scroll on mobile when the panel is open so the page
   // doesn't scroll behind the chat overlay.
@@ -51,6 +74,52 @@ export default function HireChatbot() {
     }
   }, [open, messages]);
 
+  const submitPreparedEnquiry = useCallback(
+    async (payload: PreparedSubmission) => {
+      if (submittingRef.current) return;
+      submittingRef.current = true;
+      try {
+        const enquiryId = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
+        const enquiryData = {
+          id: enquiryId,
+          ...payload,
+          submissionDateTime: new Date().toISOString(),
+          status: 'Pending',
+        };
+
+        const docRef = doc(firestore, 'booking_enquiries', enquiryId);
+        setDocumentNonBlocking(docRef, enquiryData, {});
+
+        try {
+          await sendEnquiryEmailAction(enquiryData);
+        } catch {
+          // Email is non-critical; the enquiry is already saved.
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'model',
+            kind: 'system',
+            text: `Enquiry sent — reference ${enquiryId}. The bookings secretary aims to reply within 3 working days. We'll be in touch on your preferred contact method.`,
+          },
+        ]);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'model',
+            kind: 'system',
+            text: "I couldn't save your enquiry to our system. Please try submitting via the website form at /hire#booking-form, or email bhhubbookings@gmail.com.",
+          },
+        ]);
+      } finally {
+        submittingRef.current = false;
+      }
+    },
+    [firestore]
+  );
+
   const sendMessage = useCallback(async () => {
     const text = input.trim();
     if (!text || loading) return;
@@ -61,10 +130,12 @@ export default function HireChatbot() {
     setInput('');
     setLoading(true);
 
-    // Build history for the API: all messages excluding welcome, in Genkit MessageData format
+    // Build history for the API: drop the welcome message and any system pills
+    // (they're presentational only — the LLM didn't author them).
     const history = nextMessages
-      .slice(0, -1) // exclude the just-added user message — it goes in userMessage
-      .filter((m) => m.text !== WELCOME_MESSAGE.text || m.role !== 'model') // skip system welcome
+      .slice(0, -1)
+      .filter((m) => !(m.text === WELCOME_MESSAGE.text && m.role === 'model'))
+      .filter((m) => m.kind !== 'system')
       .map((m) => ({
         role: m.role,
         content: [{ text: m.text }],
@@ -77,11 +148,20 @@ export default function HireChatbot() {
         body: JSON.stringify({ messages: history, userMessage: text }),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as {
+        response?: string;
+        error?: string;
+        submission?: PreparedSubmission;
+      };
+
       const responseText =
         data.response ?? data.error ?? 'Sorry, something went wrong. Please try again.';
 
       setMessages((prev) => [...prev, { role: 'model', text: responseText }]);
+
+      if (data.submission) {
+        await submitPreparedEnquiry(data.submission);
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -93,7 +173,7 @@ export default function HireChatbot() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages]);
+  }, [input, loading, messages, submitPreparedEnquiry]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -136,26 +216,50 @@ export default function HireChatbot() {
               events don't leak through to the page behind on mobile */}
           <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3">
             <div className="flex flex-col gap-3">
-              {messages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'flex',
-                    msg.role === 'user' ? 'justify-end' : 'justify-start'
-                  )}
-                >
+              {messages.map((msg, i) => {
+                if (msg.kind === 'system') {
+                  const isError = msg.text.toLowerCase().startsWith("i couldn't");
+                  return (
+                    <div key={i} className="flex justify-center">
+                      <div
+                        className={cn(
+                          'max-w-[92%] rounded-xl border-2 px-3 py-2.5 text-xs leading-relaxed flex items-start gap-2',
+                          isError
+                            ? 'border-red-300 bg-red-50 text-red-900'
+                            : 'border-green-300 bg-green-50 text-green-900'
+                        )}
+                      >
+                        {isError ? (
+                          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                        )}
+                        <span className="font-medium">{msg.text}</span>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
                   <div
+                    key={i}
                     className={cn(
-                      'max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap',
-                      msg.role === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-br-sm'
-                        : 'bg-muted text-foreground rounded-bl-sm'
+                      'flex',
+                      msg.role === 'user' ? 'justify-end' : 'justify-start'
                     )}
                   >
-                    {msg.text}
+                    <div
+                      className={cn(
+                        'max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap',
+                        msg.role === 'user'
+                          ? 'bg-primary text-primary-foreground rounded-br-sm'
+                          : 'bg-muted text-foreground rounded-bl-sm'
+                      )}
+                    >
+                      {msg.text}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {loading && (
                 <div className="flex justify-start">
                   <div className="bg-muted rounded-2xl rounded-bl-sm px-3.5 py-2.5">
