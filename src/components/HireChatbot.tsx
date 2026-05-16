@@ -42,6 +42,124 @@ const WELCOME_MESSAGE: Message = {
 const NUDGE_DISMISSED_KEY = 'bhhub-hire-chat-nudge-dismissed';
 const NUDGE_DELAY_MS = 4000;
 
+// Tiny inline renderer for the markdown subset Gemini actually emits in
+// chat replies (**bold**, *italic*, leading "- " / "* " bullets) plus
+// auto-linkification for the things the bot tends to mention: full URLs,
+// relative paths (e.g. /hire#booking-form), email addresses, and UK
+// mobile phone numbers (e.g. Julie's 07864 241376 — becomes a tel: link
+// so mobile users can tap to call). All output is plain React — no
+// dangerouslySetInnerHTML — and hrefs are restricted to safe schemes.
+
+function isSafeHref(url: string): boolean {
+  if (url.startsWith('/')) return true;
+  return /^(https?:|mailto:|tel:)/i.test(url);
+}
+
+function phoneToTel(raw: string): string {
+  const digits = raw.replace(/\s+/g, '');
+  return digits.startsWith('0') ? `tel:+44${digits.slice(1)}` : `tel:${digits}`;
+}
+
+function ChatLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const opensNewTab = /^https?:/i.test(href) || href.startsWith('/');
+  const extraProps = opensNewTab
+    ? { target: '_blank' as const, rel: 'noopener noreferrer' as const }
+    : {};
+  return (
+    <a
+      href={href}
+      {...extraProps}
+      className="underline underline-offset-2 font-medium break-words hover:opacity-80"
+    >
+      {children}
+    </a>
+  );
+}
+
+// Trim trailing sentence punctuation off a captured URL/path so things like
+// "see /hire#booking-form." don't pull the full stop into the link.
+function splitTrailingPunctuation(raw: string): { core: string; trail: string } {
+  const m = /[.,;:!?)]+$/.exec(raw);
+  if (!m) return { core: raw, trail: '' };
+  return { core: raw.slice(0, -m[0].length), trail: m[0] };
+}
+
+function renderRichText(text: string): React.ReactNode[] {
+  // Normalise leading bullet markers to a bullet glyph so the indent and
+  // visual cue survive without needing a real <ul>.
+  const normalised = text.replace(/^([ \t]*)[-*]\s+/gm, '$1• ');
+
+  // Combined pattern, left-to-right alternation. Capture groups:
+  //   1+2 = [text](url) markdown link
+  //   3   = **bold**
+  //   4   = *italic*
+  //   5   = http(s):// URL
+  //   6   = relative path starting with /
+  //   7   = email address
+  //   8   = UK mobile phone number (07XXX XXXXXX or 07XXXXXXXXX)
+  const pattern =
+    /\[([^\]\n]+)\]\(([^)\s]+)\)|\*\*([\s\S]+?)\*\*|(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\*)|(https?:\/\/[^\s)\]]+)|(?<![\w/])(\/[a-zA-Z][\w\-./#?=&]*)|([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})|\b(07\d{3}\s?\d{6})\b/g;
+
+  const out: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = pattern.exec(normalised)) !== null) {
+    if (m.index > lastIndex) {
+      out.push(normalised.slice(lastIndex, m.index));
+    }
+    if (m[1] !== undefined && m[2] !== undefined) {
+      if (isSafeHref(m[2])) {
+        out.push(
+          <ChatLink key={`l${key++}`} href={m[2]}>
+            {m[1]}
+          </ChatLink>
+        );
+      } else {
+        out.push(m[0]);
+      }
+    } else if (m[3] !== undefined) {
+      out.push(<strong key={`b${key++}`}>{m[3]}</strong>);
+    } else if (m[4] !== undefined) {
+      out.push(<em key={`i${key++}`}>{m[4]}</em>);
+    } else if (m[5] !== undefined) {
+      const { core, trail } = splitTrailingPunctuation(m[5]);
+      out.push(
+        <ChatLink key={`u${key++}`} href={core}>
+          {core}
+        </ChatLink>
+      );
+      if (trail) out.push(trail);
+    } else if (m[6] !== undefined) {
+      const { core, trail } = splitTrailingPunctuation(m[6]);
+      out.push(
+        <ChatLink key={`p${key++}`} href={core}>
+          {core}
+        </ChatLink>
+      );
+      if (trail) out.push(trail);
+    } else if (m[7] !== undefined) {
+      out.push(
+        <ChatLink key={`e${key++}`} href={`mailto:${m[7]}`}>
+          {m[7]}
+        </ChatLink>
+      );
+    } else if (m[8] !== undefined) {
+      out.push(
+        <ChatLink key={`t${key++}`} href={phoneToTel(m[8])}>
+          {m[8]}
+        </ChatLink>
+      );
+    }
+    lastIndex = m.index + m[0].length;
+  }
+  if (lastIndex < normalised.length) {
+    out.push(normalised.slice(lastIndex));
+  }
+  return out.length > 0 ? out : [normalised];
+}
+
 export default function HireChatbot() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
@@ -266,7 +384,7 @@ export default function HireChatbot() {
                         ) : (
                           <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
                         )}
-                        <span className="font-medium">{msg.text}</span>
+                        <span className="font-medium">{renderRichText(msg.text)}</span>
                       </div>
                     </div>
                   );
@@ -287,7 +405,7 @@ export default function HireChatbot() {
                           : 'bg-muted text-foreground rounded-bl-sm'
                       )}
                     >
-                      {msg.text}
+                      {msg.role === 'model' ? renderRichText(msg.text) : msg.text}
                     </div>
                   </div>
                 );

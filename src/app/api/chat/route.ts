@@ -209,7 +209,15 @@ export async function POST(request: NextRequest) {
       submission: result.submission,
     });
   } catch (error) {
-    console.error('Chat API error:', error);
+    // Surface the real failure into the server log so we can diagnose
+    // production issues (App Hosting prints stdout/stderr per request).
+    const err = error as { message?: string; stack?: string; cause?: unknown };
+    console.error(
+      '[chat-route] handler failed:',
+      err?.message ?? error,
+      '\nstack:', err?.stack ?? '(no stack)',
+      '\ncause:', err?.cause ?? '(no cause)'
+    );
     return NextResponse.json(
       { error: 'Sorry, I am unable to respond right now. Please try again shortly.' },
       { status: 500 }

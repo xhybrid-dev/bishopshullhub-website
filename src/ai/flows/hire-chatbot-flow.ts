@@ -33,9 +33,40 @@ const checkAvailabilityTool = ai.defineTool(
     }),
   },
   async ({ date, startTime, endTime }) => {
-    return checkAvailabilityAction(date, startTime, endTime);
+    try {
+      return await checkAvailabilityAction(date, startTime, endTime);
+    } catch (err) {
+      console.error('[chatbot] checkAvailability tool failure:', err);
+      return { status: 'error' as const, message: 'Could not reach the live calendar right now.' };
+    }
   }
 );
+
+// Gemini's function calling occasionally emits scalars as strings ("50",
+// "true", "yes") even when the schema declares them as numbers/booleans.
+// These preprocessors absorb those cases so the schema doesn't reject a
+// completed enquiry over a JSON serialisation quirk.
+const looseBoolean = () =>
+  z.preprocess((v) => {
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'string') {
+      const s = v.toLowerCase().trim();
+      if (['true', 'yes', 'y', '1', 'agree', 'agreed', 'accept', 'accepted', 'confirm', 'confirmed'].includes(s)) return true;
+      if (['false', 'no', 'n', '0', 'decline', 'declined'].includes(s)) return false;
+    }
+    return v;
+  }, z.boolean());
+
+const looseInt = (min: number, max: number) =>
+  z.preprocess((v) => {
+    if (typeof v === 'number') return Math.trunc(v);
+    if (typeof v === 'string') {
+      const cleaned = v.replace(/[^0-9.-]/g, '').trim();
+      const n = parseInt(cleaned, 10);
+      return Number.isFinite(n) ? n : v;
+    }
+    return v;
+  }, z.number().int().min(min).max(max));
 
 // Field schema mirrors src/app/hire/page.tsx so chat-submitted enquiries
 // are interchangeable with form-submitted ones.
@@ -46,16 +77,14 @@ const HireEnquiryFieldsSchema = z.object({
   postalAddress: z.string().min(5),
   postcode: z.string().min(5),
   preferredContact: z.enum(['Email', 'Phone']),
-  dateRequired: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+  dateRequired: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Time must be HH:mm'),
   endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Time must be HH:mm'),
   typeOfEvent: z.string().min(2),
-  estimatedAttendance: z.number().int().min(1).max(110),
+  estimatedAttendance: looseInt(1, 110),
   additionalRequirements: z.string().optional(),
-  acknowledgedPolicies: z.boolean(),
-  agreedToTerms: z.boolean(),
+  acknowledgedPolicies: looseBoolean(),
+  agreedToTerms: looseBoolean(),
 });
 
 const PreparedEnquiryPayloadSchema = z.object({
@@ -74,29 +103,21 @@ const PreparedEnquiryPayloadSchema = z.object({
   source: z.literal('chat'),
 });
 
-const PrepareHireEnquiryOutputSchema = z.discriminatedUnion('status', [
-  z.object({
-    status: z.literal('ready'),
-    enquiryPayload: PreparedEnquiryPayloadSchema,
-  }),
-  z.object({
-    status: z.literal('clash'),
-    clashes: z.array(
-      z.object({ summary: z.string(), start: z.string(), end: z.string() })
-    ),
-    message: z.string(),
-  }),
-  z.object({
-    status: z.literal('validation_error'),
-    errors: z.array(z.string()),
-  }),
-  z.object({
-    status: z.literal('availability_error'),
-    message: z.string(),
-  }),
-]);
+// Flat output schema (no discriminated union) for maximum compatibility
+// with the Gemini-to-Genkit JSON roundtrip. The `status` field tells the
+// caller (and the model) which other fields are populated.
+const PrepareHireEnquiryOutputSchema = z.object({
+  status: z.enum(['ready', 'clash', 'validation_error', 'availability_error', 'internal_error']),
+  enquiryPayload: PreparedEnquiryPayloadSchema.optional(),
+  clashes: z
+    .array(z.object({ summary: z.string(), start: z.string(), end: z.string() }))
+    .optional(),
+  errors: z.array(z.string()).optional(),
+  message: z.string().optional(),
+});
 
 export type PreparedEnquiryPayload = z.infer<typeof PreparedEnquiryPayloadSchema>;
+type PrepareHireEnquiryOutput = z.infer<typeof PrepareHireEnquiryOutputSchema>;
 
 const prepareHireEnquiryTool = ai.defineTool(
   {
@@ -106,81 +127,102 @@ const prepareHireEnquiryTool = ai.defineTool(
     inputSchema: HireEnquiryFieldsSchema,
     outputSchema: PrepareHireEnquiryOutputSchema,
   },
-  async (fields) => {
-    const errors: string[] = [];
-
-    if (!fields.acknowledgedPolicies) {
-      errors.push('User has not confirmed they acknowledge the Hub policies (no fireworks, no dogs, no weddings, bouncy castle rules).');
-    }
-    if (!fields.agreedToTerms) {
-      errors.push('User has not agreed to the Standard Conditions of Hire.');
-    }
-
-    // 14-day advance notice rule
+  async (fields): Promise<PrepareHireEnquiryOutput> => {
     try {
-      const requestedDate = new Date(`${fields.dateRequired}T00:00:00`);
-      const minDate = new Date();
-      minDate.setHours(0, 0, 0, 0);
-      minDate.setDate(minDate.getDate() + 14);
-      if (requestedDate < minDate) {
-        errors.push('Bookings must be at least 14 days in advance. Please choose a later date.');
+      const errors: string[] = [];
+
+      if (!fields.acknowledgedPolicies) {
+        errors.push('User has not confirmed they acknowledge the Hub policies (no fireworks, no dogs, no weddings, bouncy castle rules).');
       }
-    } catch {
-      errors.push('Date could not be parsed — please reconfirm in YYYY-MM-DD format.');
-    }
+      if (!fields.agreedToTerms) {
+        errors.push('User has not agreed to the Standard Conditions of Hire.');
+      }
 
-    // End strictly after start
-    if (fields.endTime <= fields.startTime) {
-      errors.push('End time must be after start time.');
-    }
+      // 14-day advance notice rule
+      try {
+        const requestedDate = new Date(`${fields.dateRequired}T00:00:00`);
+        const minDate = new Date();
+        minDate.setHours(0, 0, 0, 0);
+        minDate.setDate(minDate.getDate() + 14);
+        if (Number.isNaN(requestedDate.getTime())) {
+          errors.push('Date could not be parsed — please reconfirm in YYYY-MM-DD format.');
+        } else if (requestedDate < minDate) {
+          errors.push('Bookings must be at least 14 days in advance. Please choose a later date.');
+        }
+      } catch {
+        errors.push('Date could not be parsed — please reconfirm in YYYY-MM-DD format.');
+      }
 
-    if (errors.length > 0) {
-      return { status: 'validation_error' as const, errors };
-    }
+      // End strictly after start
+      if (fields.endTime <= fields.startTime) {
+        errors.push('End time must be after start time.');
+      }
 
-    // Defence in depth — re-check availability immediately before preparing the
-    // payload so a race between the earlier check and submission still blocks
-    // a colliding booking.
-    const availability = await checkAvailabilityAction(
-      fields.dateRequired,
-      fields.startTime,
-      fields.endTime
-    );
+      if (errors.length > 0) {
+        return { status: 'validation_error', errors };
+      }
 
-    if (availability.status === 'clash') {
+      // Defence in depth — re-check availability immediately before preparing
+      // the payload so a race between the earlier check and submission still
+      // blocks a colliding booking.
+      let availability;
+      try {
+        availability = await checkAvailabilityAction(
+          fields.dateRequired,
+          fields.startTime,
+          fields.endTime
+        );
+      } catch (err) {
+        console.error('[chatbot] prepareHireEnquiry availability check threw:', err);
+        return {
+          status: 'availability_error',
+          message:
+            'The live calendar could not be reached. Ask the user to try again shortly, or submit via the website form at /hire#booking-form.',
+        };
+      }
+
+      if (availability.status === 'clash') {
+        return {
+          status: 'clash',
+          clashes: availability.clashes,
+          message:
+            'This slot now conflicts with an existing booking. Do NOT submit. Tell the user to check the live schedule at /hire#booking-form and choose another slot.',
+        };
+      }
+
+      if (availability.status === 'error') {
+        return {
+          status: 'availability_error',
+          message:
+            'The live calendar could not be reached. Ask the user to try again shortly, or submit via the website form at /hire#booking-form.',
+        };
+      }
+
+      const enquiryPayload: PreparedEnquiryPayload = {
+        name: fields.name,
+        emailAddress: fields.email,
+        phoneNumber: fields.phone,
+        postalAddress: fields.postalAddress,
+        postcode: fields.postcode,
+        preferredContact: fields.preferredContact,
+        dateRequired: fields.dateRequired,
+        startTime: fields.startTime,
+        endTime: fields.endTime,
+        typeOfEvent: fields.typeOfEvent,
+        estimatedAttendance: fields.estimatedAttendance,
+        additionalRequirements: fields.additionalRequirements?.trim() || 'None provided',
+        source: 'chat',
+      };
+
+      return { status: 'ready', enquiryPayload };
+    } catch (err) {
+      console.error('[chatbot] prepareHireEnquiry tool threw unexpectedly:', err);
       return {
-        status: 'clash' as const,
-        clashes: availability.clashes,
+        status: 'internal_error',
         message:
-          'This slot now conflicts with an existing booking. Do NOT submit. Tell the user to check the live schedule at /hire#booking-form and choose another slot.',
+          'An unexpected error occurred preparing the enquiry. Apologise to the user and ask them to use the website form at /hire#booking-form.',
       };
     }
-
-    if (availability.status === 'error') {
-      return {
-        status: 'availability_error' as const,
-        message:
-          'The live calendar could not be reached. Ask the user to try again shortly, or submit via the website form at /hire#booking-form.',
-      };
-    }
-
-    const enquiryPayload: PreparedEnquiryPayload = {
-      name: fields.name,
-      emailAddress: fields.email,
-      phoneNumber: fields.phone,
-      postalAddress: fields.postalAddress,
-      postcode: fields.postcode,
-      preferredContact: fields.preferredContact,
-      dateRequired: fields.dateRequired,
-      startTime: fields.startTime,
-      endTime: fields.endTime,
-      typeOfEvent: fields.typeOfEvent,
-      estimatedAttendance: fields.estimatedAttendance,
-      additionalRequirements: fields.additionalRequirements?.trim() || 'None provided',
-      source: 'chat',
-    };
-
-    return { status: 'ready' as const, enquiryPayload };
   }
 );
 
@@ -210,12 +252,21 @@ export const hireChatbotFlow = ai.defineFlow(
     outputSchema: HireChatbotOutputSchema,
   },
   async ({ systemPrompt, history, userMessage }) => {
-    const response = await ai.generate({
-      system: systemPrompt,
-      messages: history,
-      prompt: userMessage,
-      tools: [checkAvailabilityTool, prepareHireEnquiryTool],
-    });
+    let response;
+    try {
+      response = await ai.generate({
+        system: systemPrompt,
+        messages: history,
+        prompt: userMessage,
+        tools: [checkAvailabilityTool, prepareHireEnquiryTool],
+      });
+    } catch (err) {
+      console.error('[chatbot] ai.generate failed:', err);
+      return {
+        response:
+          "I'm having trouble reaching the booking assistant right now. Please try again in a moment, or email bhhubbookings@gmail.com for booking enquiries.",
+      };
+    }
 
     // Find the latest prepareHireEnquiry tool response in this turn's
     // message history; if it returned status:'ready', we surface the
@@ -223,19 +274,33 @@ export const hireChatbotFlow = ai.defineFlow(
     // using the visitor's existing anonymous auth context (same path
     // the form uses).
     let submission: PreparedEnquiryPayload | undefined;
-    for (const msg of response.messages ?? []) {
-      for (const part of msg.content ?? []) {
-        const toolResponse = (part as { toolResponse?: { name?: string; output?: unknown } })
-          .toolResponse;
-        if (toolResponse?.name === 'prepareHireEnquiry') {
-          const out = toolResponse.output as { status?: string; enquiryPayload?: PreparedEnquiryPayload };
-          if (out?.status === 'ready' && out.enquiryPayload) {
-            submission = out.enquiryPayload;
+    try {
+      for (const msg of response.messages ?? []) {
+        for (const part of msg.content ?? []) {
+          const toolResponse = (part as { toolResponse?: { name?: string; output?: unknown } })
+            .toolResponse;
+          if (toolResponse?.name === 'prepareHireEnquiry') {
+            const out = toolResponse.output as
+              | { status?: string; enquiryPayload?: PreparedEnquiryPayload }
+              | undefined;
+            if (out?.status === 'ready' && out.enquiryPayload) {
+              submission = out.enquiryPayload;
+            }
           }
         }
       }
+    } catch (err) {
+      console.error('[chatbot] failed to extract submission from tool messages:', err);
     }
 
-    return { response: response.text, submission };
+    const text = response.text?.trim();
+    return {
+      response:
+        text ||
+        (submission
+          ? 'Submitting your enquiry now…'
+          : "Sorry, I didn't catch that — could you rephrase?"),
+      submission,
+    };
   }
 );
