@@ -11,7 +11,7 @@ import { doc, collection, query, orderBy, updateDoc, onSnapshot } from 'firebase
 import { Badge } from '@/components/ui/badge';
 import { signOut } from 'firebase/auth';
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { cn, formatUKDate, formatUKDateTime } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -883,7 +883,7 @@ function KanbanCard({ enquiry, clashes, onUpdateStatus, onSendToSecurity, onSend
         </div>
         <div>
           <h4 className="font-bold text-sm text-primary">{enquiry.name}</h4>
-          <p className="text-[10px] opacity-60 flex items-center gap-1"><Calendar className="h-3 w-3" /> {enquiry.dateRequired}</p>
+          <p className="text-[10px] opacity-60 flex items-center gap-1"><Calendar className="h-3 w-3" /> {formatUKDate(enquiry.dateRequired)}</p>
         </div>
         
         <div className="flex justify-between items-center text-[10px] text-muted-foreground">
@@ -1073,7 +1073,7 @@ function DepositRow({
           <div>
             <h3 className="font-bold text-primary text-base">{enquiry.name}</h3>
             <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
-              <Calendar className="h-3 w-3" /> {enquiry.dateRequired} · {enquiry.startTime}–{enquiry.endTime}
+              <Calendar className="h-3 w-3" /> {formatUKDate(enquiry.dateRequired)} · {enquiry.startTime}–{enquiry.endTime}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">{enquiry.typeOfEvent}</p>
           </div>
@@ -1112,7 +1112,7 @@ function DepositRow({
                   : `Deduction return (£${previousReturn.amount.toFixed(2)} of £${previousReturn.fullDeposit?.toFixed?.(2) ?? fullDeposit.toFixed(2)}) sent to Treasurer`}
               </p>
               {previousReturn.reason && <p className="opacity-80 mt-0.5">Reason: {previousReturn.reason}</p>}
-              <p className="opacity-60 text-[10px] mt-0.5">{format(parseISO(previousReturn.sentAt), 'PPp')}</p>
+              <p className="opacity-60 text-[10px] mt-0.5">{formatUKDateTime(previousReturn.sentAt)}</p>
             </div>
           </div>
         )}

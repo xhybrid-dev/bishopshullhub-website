@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { submitHireConfirmationAction } from '@/app/actions/send-email';
 import { SITE_CONTACT } from '@/lib/site-contact';
+import { formatUKDate } from '@/lib/utils';
 
 const HIRE_CONDITIONS = [
   'I have read, understood and agree with the terms of the Hire Agreement.',
@@ -312,7 +313,7 @@ export default function HireConfirmationPage({ params }: { params: Promise<{ id:
               </div>
               <div>
                 <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Date</Label>
-                <p className="flex items-center gap-1.5 font-medium"><Calendar className="h-4 w-4 text-muted-foreground" />{enquiry.dateRequired}</p>
+                <p className="flex items-center gap-1.5 font-medium"><Calendar className="h-4 w-4 text-muted-foreground" />{formatUKDate(enquiry.dateRequired)}</p>
               </div>
               <div>
                 <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Time</Label>

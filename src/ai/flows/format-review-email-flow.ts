@@ -5,6 +5,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { formatUKDate } from '@/lib/utils';
 
 const FormatReviewEmailInputSchema = z.object({
   enquiryData: z.any().describe('The full enquiry data object.'),
@@ -28,12 +29,16 @@ const formatReviewEmailFlow = ai.defineFlow(
     outputSchema: FormatReviewEmailOutputSchema,
   },
   async (input) => {
+    const displayData = {
+      ...input.enquiryData,
+      dateRequired: formatUKDate(input.enquiryData?.dateRequired) || input.enquiryData?.dateRequired,
+    };
     const { output } = await ai.generate({
-      prompt: `You are an automated administrative assistant for the Bishops Hull Hub. 
+      prompt: `You are an automated administrative assistant for the Bishops Hull Hub.
       Format a "Security Review Requested" email for our Security Team.
-      
+
       The Security Team needs full visibility into the event details to decide if the booking is safe and appropriate for our community hub.
-      
+
       Please format an email that includes:
       1. A clear subject line including the event and date.
       2. A professional HTML body that lists EVERY detail from the enquiry below.
@@ -41,9 +46,11 @@ const formatReviewEmailFlow = ai.defineFlow(
       4. A matching plain text version.
 
       Event Data:
-      ${JSON.stringify(input.enquiryData, null, 2)}
-      
-      Ensure the tone is professional, clear, and emphasizes the importance of their review.`,
+      ${JSON.stringify(displayData, null, 2)}
+
+      Ensure the tone is professional, clear, and emphasizes the importance of their review.
+
+      Important: render every date in UK format DD-MM-YYYY (day-month-year). Do not reorder to YYYY-MM-DD or US MM/DD/YYYY style.`,
       output: { schema: FormatReviewEmailOutputSchema },
     });
     return output!;

@@ -10,7 +10,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { Loader2, ShieldCheck, CheckCircle2, Clock, Calendar, User, Info, AlertTriangle, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { cn, formatUKDate } from '@/lib/utils';
 
 export default function SecurityReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -133,7 +133,7 @@ export default function SecurityReviewPage({ params }: { params: Promise<{ id: s
                 <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Requested Times</Label>
                 <div className="flex items-center gap-2 font-medium">
                   <Clock className="h-5 w-5 text-muted-foreground" /> 
-                  {enquiry.dateRequired} | {enquiry.startTime} - {enquiry.endTime}
+                  {formatUKDate(enquiry.dateRequired)} | {enquiry.startTime} - {enquiry.endTime}
                 </div>
               </div>
             </div>

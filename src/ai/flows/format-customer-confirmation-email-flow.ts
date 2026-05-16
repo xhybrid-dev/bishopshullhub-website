@@ -1,6 +1,8 @@
 
 'use server';
 
+import { formatUKDate } from '@/lib/utils';
+
 export async function formatCustomerConfirmationEmail(input: { enquiryData: any; faqUrl: string }) {
   const { enquiryData, faqUrl } = input;
 
@@ -9,7 +11,7 @@ export async function formatCustomerConfirmationEmail(input: { enquiryData: any;
 
   const name      = enquiryData.name          || 'there';
   const eventType = enquiryData.typeOfEvent   || 'your event';
-  const date      = enquiryData.dateRequired  || '';
+  const date      = formatUKDate(enquiryData.dateRequired);
   const startTime = enquiryData.startTime     || '';
   const endTime   = enquiryData.endTime       || '';
 

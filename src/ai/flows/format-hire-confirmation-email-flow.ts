@@ -1,6 +1,7 @@
 'use server';
 
 import { SITE_CONTACT } from '@/lib/site-contact';
+import { formatUKDate, formatUKDateTime } from '@/lib/utils';
 
 const HIRE_CONDITIONS = [
   'I have read, understood and agree with the terms of the Hire Agreement.',
@@ -22,7 +23,7 @@ export async function formatHireConfirmationInviteEmail(input: {
   const { enquiryData, confirmUrl } = input;
   const name = enquiryData.name || 'there';
   const eventType = enquiryData.typeOfEvent || 'your event';
-  const date = enquiryData.dateRequired || '';
+  const date = formatUKDate(enquiryData.dateRequired);
   const startTime = enquiryData.startTime || '';
   const endTime = enquiryData.endTime || '';
 
@@ -113,8 +114,10 @@ export async function formatHireConfirmationAdminEmail(input: {
   };
 }) {
   const { enquiryData, confirmation } = input;
-  const subject = `Hire Agreement Signed: ${confirmation.yourName} — ${confirmation.bookingDate}`;
-  const headerLine = `${confirmation.yourName} has confirmed the hire agreement on ${confirmation.confirmedAt}`;
+  const bookingDateDisplay = formatUKDate(confirmation.bookingDate);
+  const confirmedAtDisplay = formatUKDateTime(confirmation.confirmedAt);
+  const subject = `Hire Agreement Signed: ${confirmation.yourName} — ${bookingDateDisplay}`;
+  const headerLine = `${confirmation.yourName} has confirmed the hire agreement on ${confirmedAtDisplay}`;
 
   const conditionsHtml = HIRE_CONDITIONS
     .map(c => `<li style="margin:0 0 8px;">${c}</li>`)
@@ -126,9 +129,9 @@ export async function formatHireConfirmationAdminEmail(input: {
 
 AGREEMENT OF CONDITIONS OF HIRE
 ================================
-Booking on ${confirmation.bookingDate} at ${confirmation.startTime} until ${confirmation.endTime}
+Booking on ${bookingDateDisplay} at ${confirmation.startTime} until ${confirmation.endTime}
 
-Confirmed: ${confirmation.confirmedAt}
+Confirmed: ${confirmedAtDisplay}
 
 If you are in any doubt as to the meaning of any of the Conditions, you must seek clarification from us without delay.
 
@@ -137,7 +140,7 @@ ${conditionsText}
 Name:         ${confirmation.yourName}
 Organisation: ${confirmation.organisation || '—'}
 Signed:       (see attached signature image)
-Dated:        ${confirmation.confirmedAt}
+Dated:        ${confirmedAtDisplay}
 
 BANK DETAILS (for deposit return)
 ---------------------------------
@@ -160,8 +163,8 @@ Enquiry ID: ${enquiryData.id}`;
         </td></tr>
         <tr><td style="padding:28px 32px;color:#1e293b;line-height:1.6;">
           <h2 style="margin:0 0 8px;font-size:22px;color:#1a4d46;">Agreement of Conditions of Hire</h2>
-          <p style="margin:0 0 6px;"><strong>Booking on ${confirmation.bookingDate}</strong> at ${confirmation.startTime} until ${confirmation.endTime}</p>
-          <h3 style="margin:18px 0 6px;font-size:15px;color:#1a4d46;">${confirmation.confirmedAt}</h3>
+          <p style="margin:0 0 6px;"><strong>Booking on ${bookingDateDisplay}</strong> at ${confirmation.startTime} until ${confirmation.endTime}</p>
+          <h3 style="margin:18px 0 6px;font-size:15px;color:#1a4d46;">${confirmedAtDisplay}</h3>
           <p style="margin:0 0 14px;font-size:14px;">If you are in any doubt as to the meaning of any of the Conditions, you must seek clarification from us without delay.</p>
           <ol style="margin:0 0 18px 18px;padding:0;font-size:14px;color:#334155;">
             ${conditionsHtml}
@@ -171,7 +174,7 @@ Enquiry ID: ${enquiryData.id}`;
               <p style="margin:0 0 4px;"><strong>Name:</strong> ${confirmation.yourName}</p>
               ${confirmation.organisation ? `<p style="margin:0 0 4px;"><strong>Organisation:</strong> ${confirmation.organisation}</p>` : ''}
               <p style="margin:0 0 4px;"><strong>Signed:</strong> (signature image attached)</p>
-              <p style="margin:0;"><strong>Dated:</strong> ${confirmation.confirmedAt}</p>
+              <p style="margin:0;"><strong>Dated:</strong> ${confirmedAtDisplay}</p>
             </td></tr>
           </table>
           <h3 style="margin:18px 0 8px;font-size:15px;color:#1a4d46;">Bank Details (for deposit return)</h3>
@@ -199,7 +202,8 @@ export async function formatHireConfirmationCustomerEmail(input: {
   hireConditionsUrl: string;
 }) {
   const { enquiryData, confirmation, hireConditionsUrl } = input;
-  const subject = `Booking Confirmed — ${confirmation.bookingDate} at the Bishops Hull Hub`;
+  const bookingDateDisplay = formatUKDate(confirmation.bookingDate);
+  const subject = `Booking Confirmed — ${bookingDateDisplay} at the Bishops Hull Hub`;
 
   const conditionsHtml = HIRE_CONDITIONS
     .map(c => `<li style="margin:0 0 8px;">${c}</li>`)
@@ -208,7 +212,7 @@ export async function formatHireConfirmationCustomerEmail(input: {
 
   const textBody = `Dear ${confirmation.yourName},
 
-Thank you for confirming your hire for the Bishops Hull Hub on ${confirmation.bookingDate} at ${confirmation.startTime}. We really hope you enjoy your use of our community facility. We will confirm your booking now and arrange your invoice for payment.
+Thank you for confirming your hire for the Bishops Hull Hub on ${bookingDateDisplay} at ${confirmation.startTime}. We really hope you enjoy your use of our community facility. We will confirm your booking now and arrange your invoice for payment.
 
 If you are in any doubt as to the meaning of any of the Conditions, you must seek clarification from us without delay.
 
@@ -242,7 +246,7 @@ Booking enquiries: bhhubbookings@gmail.com`;
         </td></tr>
         <tr><td style="padding:36px 40px;color:#1e293b;line-height:1.7;font-size:16px;">
           <p style="margin:0 0 16px;">Dear ${confirmation.yourName},</p>
-          <p style="margin:0 0 16px;">Thank you for confirming your hire for the Bishops Hull Hub on <strong>${confirmation.bookingDate}</strong> at <strong>${confirmation.startTime}</strong>. We really hope you enjoy your use of our community facility. We will confirm your booking now and arrange your invoice for payment.</p>
+          <p style="margin:0 0 16px;">Thank you for confirming your hire for the Bishops Hull Hub on <strong>${bookingDateDisplay}</strong> at <strong>${confirmation.startTime}</strong>. We really hope you enjoy your use of our community facility. We will confirm your booking now and arrange your invoice for payment.</p>
           <p style="margin:0 0 14px;">If you are in any doubt as to the meaning of any of the Conditions, you must seek clarification from us without delay.</p>
           <ol style="margin:0 0 18px 18px;padding:0;font-size:14px;color:#334155;">
             ${conditionsHtml}

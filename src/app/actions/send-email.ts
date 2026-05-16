@@ -10,20 +10,22 @@ import {
   formatHireConfirmationCustomerEmail,
 } from '@/ai/flows/format-hire-confirmation-email-flow';
 import { Resend } from 'resend';
+import { formatUKDate } from '@/lib/utils';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const ADMIN_EMAIL = 'bhhubbookings@gmail.com';
 const TREASURER_EMAIL = 'jdlee9900@gmail.com';
 
 function buildFallbackAdminEmail(enquiryData: any) {
-  const subject = `New Booking Enquiry: ${enquiryData.typeOfEvent || 'Event'} on ${enquiryData.dateRequired || 'TBC'}`;
+  const displayDate = formatUKDate(enquiryData.dateRequired) || 'TBC';
+  const subject = `New Booking Enquiry: ${enquiryData.typeOfEvent || 'Event'} on ${displayDate}`;
   const textBody = `NEW BOOKING ENQUIRY
 -------------------
 Enquiry ID: ${enquiryData.id}
 Submitted:  ${enquiryData.submissionDateTime}
 
 Event:       ${enquiryData.typeOfEvent}
-Date:        ${enquiryData.dateRequired}
+Date:        ${displayDate}
 Times:       ${enquiryData.startTime} – ${enquiryData.endTime}
 Attendance:  ${enquiryData.estimatedAttendance}
 
@@ -45,7 +47,7 @@ ${enquiryData.additionalRequirements}`;
       <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
         <h2 style="margin-top: 0; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Event</h2>
         <p style="margin:4px 0;"><strong>Type:</strong> ${enquiryData.typeOfEvent}</p>
-        <p style="margin:4px 0;"><strong>Date:</strong> ${enquiryData.dateRequired}</p>
+        <p style="margin:4px 0;"><strong>Date:</strong> ${displayDate}</p>
         <p style="margin:4px 0;"><strong>Times:</strong> ${enquiryData.startTime} – ${enquiryData.endTime}</p>
         <p style="margin:4px 0;"><strong>Attendance:</strong> ${enquiryData.estimatedAttendance}</p>
 
@@ -140,8 +142,9 @@ export async function sendSecurityReviewEmailAction(enquiryData: any, securityCo
       formattedEmail = await formatReviewEmail({ enquiryData, reviewUrl });
     } catch (aiError: any) {
       console.error('AI Formatting failed, using fallback:', aiError);
+      const displayDate = formatUKDate(enquiryData.dateRequired);
       formattedEmail = {
-        subject: `Security Review Required: ${enquiryData.typeOfEvent} on ${enquiryData.dateRequired}`,
+        subject: `Security Review Required: ${enquiryData.typeOfEvent} on ${displayDate}`,
         htmlBody: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
             <div style="background-color: #1a4d46; color: white; padding: 24px; text-align: center;">
@@ -153,7 +156,7 @@ export async function sendSecurityReviewEmailAction(enquiryData: any, securityCo
               <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
                 <h2 style="margin-top: 0; font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">Event Details</h2>
                 <p><strong>Type:</strong> ${enquiryData.typeOfEvent}</p>
-                <p><strong>Date:</strong> ${enquiryData.dateRequired}</p>
+                <p><strong>Date:</strong> ${displayDate}</p>
                 <p><strong>Times:</strong> ${enquiryData.startTime} - ${enquiryData.endTime}</p>
                 <p><strong>Attendance:</strong> ${enquiryData.estimatedAttendance} people</p>
                 
@@ -177,7 +180,7 @@ export async function sendSecurityReviewEmailAction(enquiryData: any, securityCo
 SECURITY REVIEW REQUESTED
 -------------------------
 Event: ${enquiryData.typeOfEvent}
-Date: ${enquiryData.dateRequired}
+Date: ${displayDate}
 Time: ${enquiryData.startTime} - ${enquiryData.endTime}
 Hirer: ${enquiryData.name}
 Attendance: ${enquiryData.estimatedAttendance}
@@ -348,6 +351,7 @@ export async function sendDepositReturnEmailAction(input: {
     const { enquiryData, amount, fullDeposit, isFullReturn, reason } = input;
     const confirmation = enquiryData.confirmation || {};
     const deduction = Math.max(0, fullDeposit - amount);
+    const hireDate = formatUKDate(enquiryData.dateRequired);
 
     const subject = isFullReturn
       ? `Deposit Return Authorised: ${enquiryData.name} (£${amount.toFixed(2)})`
@@ -357,7 +361,7 @@ export async function sendDepositReturnEmailAction(input: {
 ----------------------------
 Hirer:         ${enquiryData.name}
 Event:         ${enquiryData.typeOfEvent}
-Hire Date:     ${enquiryData.dateRequired}
+Hire Date:     ${hireDate}
 Times:         ${enquiryData.startTime} – ${enquiryData.endTime}
 Enquiry ID:    ${enquiryData.id}
 
@@ -384,7 +388,7 @@ Hirer Contact:   ${enquiryData.emailAddress} / ${enquiryData.phoneNumber}
           <h2 style="margin-top: 0; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Hire Summary</h2>
           <p style="margin:4px 0;"><strong>Hirer:</strong> ${enquiryData.name}</p>
           <p style="margin:4px 0;"><strong>Event:</strong> ${enquiryData.typeOfEvent}</p>
-          <p style="margin:4px 0;"><strong>Hire Date:</strong> ${enquiryData.dateRequired}</p>
+          <p style="margin:4px 0;"><strong>Hire Date:</strong> ${hireDate}</p>
           <p style="margin:4px 0;"><strong>Times:</strong> ${enquiryData.startTime} – ${enquiryData.endTime}</p>
 
           <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Refund</h2>
