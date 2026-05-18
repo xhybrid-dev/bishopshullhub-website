@@ -1,10 +1,9 @@
 "use client";
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useScroll, useTransform, motion } from 'framer-motion';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 interface HeroSectionProps {
@@ -13,7 +12,18 @@ interface HeroSectionProps {
 
 export default function HeroSection({ heroImageUrl }: HeroSectionProps) {
   const ref = useRef<HTMLElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { scrollY } = useScroll();
+
+  // Parallax/overlay effects only apply on desktop — mobile uses a stacked layout.
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   // Parallax: image moves up at ~40% of scroll speed
   const imageY = useTransform(scrollY, [0, 600], ['0%', '25%']);
@@ -25,30 +35,72 @@ export default function HeroSection({ heroImageUrl }: HeroSectionProps) {
   const blurAmount = useTransform(scrollY, [0, 350], [0, 10]);
   const blurFilter = useTransform(blurAmount, (v) => `blur(${v}px)`);
 
+  // Boomerang loop: play forward, then manually rewind via rAF, then repeat.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    let rafId: number | null = null;
+    let lastTimestamp = 0;
+    let cancelled = false;
+
+    const reverseTick = (now: number) => {
+      if (cancelled) return;
+      const dt = (now - lastTimestamp) / 1000;
+      lastTimestamp = now;
+      const next = video.currentTime - dt;
+      if (next <= 0) {
+        video.currentTime = 0;
+        video.play().catch(() => {});
+        return;
+      }
+      video.currentTime = next;
+      rafId = requestAnimationFrame(reverseTick);
+    };
+
+    const handleEnded = () => {
+      video.pause();
+      lastTimestamp = performance.now();
+      rafId = requestAnimationFrame(reverseTick);
+    };
+
+    video.addEventListener('ended', handleEnded);
+    video.play().catch(() => {});
+
+    return () => {
+      cancelled = true;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      video.removeEventListener('ended', handleEnded);
+    };
+  }, []);
+
 
   return (
     <section
       ref={ref}
-      className="relative h-[60vh] md:h-[680px] flex items-center justify-center overflow-hidden"
+      className="relative flex flex-col md:items-center md:justify-center md:h-[680px] md:overflow-hidden"
     >
-      {/* Parallax background image */}
+      {/* Video — full-width banner on mobile, parallax background on desktop */}
       <motion.div
-        className="absolute inset-0 z-0 scale-110"
-        style={{ y: imageY }}
+        className="relative w-full md:absolute md:inset-0 md:z-0 md:scale-110"
+        style={{ y: isDesktop ? imageY : 0 }}
       >
-        <Image
-          src={heroImageUrl}
-          alt="Bishops Hull Hub Exterior"
-          fill
-          className="object-cover"
-          priority
-          data-ai-hint="modern building community hall"
+        <video
+          ref={videoRef}
+          src="/hub-header-video.mp4"
+          poster={heroImageUrl}
+          muted
+          playsInline
+          autoPlay
+          preload="auto"
+          aria-label="Bishops Hull Hub Exterior"
+          className="block w-full h-auto md:absolute md:inset-0 md:h-full md:w-full md:object-cover"
         />
       </motion.div>
 
-      {/* Darkening overlay with frosted glass effect */}
+      {/* Darkening overlay with frosted glass effect — desktop only */}
       <motion.div
-        className="absolute inset-0 z-10"
+        className="hidden md:block absolute inset-0 z-10"
         style={{
           opacity: overlayOpacity,
           backdropFilter: blurFilter,
@@ -56,54 +108,56 @@ export default function HeroSection({ heroImageUrl }: HeroSectionProps) {
         }}
       />
 
-      {/* Hero content */}
-      <div className="container relative z-20 text-center text-white px-4 space-y-5 md:space-y-7">
-        <motion.h1
-          className="text-4xl md:text-6xl font-headline font-bold tracking-tight drop-shadow-lg"
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: 'easeOut' }}
-        >
-          Welcome to the{' '}
-          <span className="text-accent">Bishops Hull Hub</span>
-        </motion.h1>
-
-        <motion.p
-          className="font-marker text-2xl md:text-3xl max-w-2xl mx-auto drop-shadow-md text-white/90"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.15, ease: 'easeOut' }}
-        >
-          The heart of our village community.
-        </motion.p>
-
-        <motion.div
-          className="flex flex-col sm:flex-row gap-3 justify-center pt-2"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.3, ease: 'easeOut' }}
-        >
-          <Button
-            asChild
-            size="lg"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground text-base md:text-lg px-8 h-12 md:h-14 shadow-lg"
+      {/* Hero content — in flow below the video on mobile, overlaid on desktop */}
+      <div className="relative z-20 w-full bg-primary md:bg-transparent md:absolute md:inset-0 md:flex md:items-center md:justify-center md:w-auto">
+        <div className="container text-center text-white px-4 py-10 pb-20 md:py-0 md:pb-0 space-y-5 md:space-y-7">
+          <motion.h1
+            className="text-4xl md:text-6xl font-headline font-bold tracking-tight md:drop-shadow-lg"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: 'easeOut' }}
           >
-            <Link href="/whats-on">View Schedule</Link>
-          </Button>
-          <Button
-            asChild
-            size="lg"
-            variant="outline"
-            className="bg-white/10 backdrop-blur-sm border-white/30 hover:bg-white/25 text-white text-base md:text-lg px-8 h-12 md:h-14"
+            Welcome to the{' '}
+            <span className="text-accent">Bishops Hull Hub</span>
+          </motion.h1>
+
+          <motion.p
+            className="font-marker text-2xl md:text-3xl max-w-2xl mx-auto md:drop-shadow-md text-white/90"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.15, ease: 'easeOut' }}
           >
-            <Link href="/hire">Make a Booking</Link>
-          </Button>
-        </motion.div>
+            The heart of our village community.
+          </motion.p>
+
+          <motion.div
+            className="flex flex-col sm:flex-row gap-3 justify-center pt-2"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.3, ease: 'easeOut' }}
+          >
+            <Button
+              asChild
+              size="lg"
+              className="bg-white text-primary hover:bg-white/90 md:bg-primary md:text-primary-foreground md:hover:bg-primary/90 text-base md:text-lg px-8 h-12 md:h-14 shadow-lg"
+            >
+              <Link href="/whats-on">View Schedule</Link>
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="bg-white/10 backdrop-blur-sm border-white/40 hover:bg-white/25 text-white text-base md:text-lg px-8 h-12 md:h-14"
+            >
+              <Link href="/hire">Make a Booking</Link>
+            </Button>
+          </motion.div>
+        </div>
       </div>
 
-      {/* Scroll indicator */}
+      {/* Scroll indicator — desktop only */}
       <motion.div
-        className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 text-white/70"
+        className="hidden md:block absolute bottom-6 left-1/2 -translate-x-1/2 z-20 text-white/70"
         animate={{ y: [0, 8, 0] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
         initial={{ opacity: 0 }}
