@@ -1,8 +1,23 @@
 
+import type { Metadata } from 'next';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Heart, Landmark, Music, Wind, Hand, TreePine, Accessibility, Download, Users } from 'lucide-react';
+
+export const metadata: Metadata = {
+  title: 'Community Projects | Bishops Hull Hub',
+  description:
+    'Discover the community projects supported by Bishops Hull Hub — the sensory trail, garden, accessibility initiatives and ways to get involved in Bishops Hull, Taunton.',
+  alternates: { canonical: '/community' },
+  openGraph: {
+    title: 'Community Projects | Bishops Hull Hub',
+    description:
+      'Sensory trail, community garden and other projects at the heart of Bishops Hull.',
+    url: 'https://bhhub.co.uk/community',
+    type: 'website',
+  },
+};
 
 export default function CommunityPage() {
   const sensoryMain = PlaceHolderImages.find(img => img.id === 'sensory-trail-main');

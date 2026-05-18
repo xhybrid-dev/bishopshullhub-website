@@ -1,9 +1,24 @@
+import type { Metadata } from 'next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle2, Ruler, ShieldCheck, Zap, Camera, ExternalLink, Star } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+
+export const metadata: Metadata = {
+  title: 'Bouncy Castle Guidance | Bishops Hull Hub',
+  description:
+    'Guidance for hiring bouncy castles at Bishops Hull Hub — size limits for indoor and outdoor use, safety requirements and approved suppliers in Taunton.',
+  alternates: { canonical: '/bouncy-castles' },
+  openGraph: {
+    title: 'Bouncy Castle Guidance | Bishops Hull Hub',
+    description:
+      'Indoor and outdoor bouncy castle guidance for hires at Bishops Hull Hub, Taunton.',
+    url: 'https://bhhub.co.uk/bouncy-castles',
+    type: 'website',
+  },
+};
 
 export default function BouncyCastlesPage() {
   const exampleImage = PlaceHolderImages.find(img => img.id === 'bouncy-castle-example');
