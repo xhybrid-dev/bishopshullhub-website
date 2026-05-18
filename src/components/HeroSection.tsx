@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { useScroll, useTransform, motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
@@ -12,7 +13,6 @@ interface HeroSectionProps {
 
 export default function HeroSection({ heroImageUrl }: HeroSectionProps) {
   const ref = useRef<HTMLElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const { scrollY } = useScroll();
 
   // Parallax/overlay effects only apply on desktop — mobile uses a stacked layout.
@@ -25,6 +25,18 @@ export default function HeroSection({ heroImageUrl }: HeroSectionProps) {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
+  // Fall back to the static image if the video errors out or the user prefers reduced motion.
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  const showVideo = !videoFailed && !prefersReducedMotion;
+
   // Parallax: image moves up at ~40% of scroll speed
   const imageY = useTransform(scrollY, [0, 600], ['0%', '25%']);
 
@@ -34,45 +46,6 @@ export default function HeroSection({ heroImageUrl }: HeroSectionProps) {
   // Frosted glass blur increases on scroll
   const blurAmount = useTransform(scrollY, [0, 350], [0, 10]);
   const blurFilter = useTransform(blurAmount, (v) => `blur(${v}px)`);
-
-  // Boomerang loop: play forward, then manually rewind via rAF, then repeat.
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    let rafId: number | null = null;
-    let lastTimestamp = 0;
-    let cancelled = false;
-
-    const reverseTick = (now: number) => {
-      if (cancelled) return;
-      const dt = (now - lastTimestamp) / 1000;
-      lastTimestamp = now;
-      const next = video.currentTime - dt;
-      if (next <= 0) {
-        video.currentTime = 0;
-        video.play().catch(() => {});
-        return;
-      }
-      video.currentTime = next;
-      rafId = requestAnimationFrame(reverseTick);
-    };
-
-    const handleEnded = () => {
-      video.pause();
-      lastTimestamp = performance.now();
-      rafId = requestAnimationFrame(reverseTick);
-    };
-
-    video.addEventListener('ended', handleEnded);
-    video.play().catch(() => {});
-
-    return () => {
-      cancelled = true;
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      video.removeEventListener('ended', handleEnded);
-    };
-  }, []);
 
 
   return (
@@ -85,17 +58,33 @@ export default function HeroSection({ heroImageUrl }: HeroSectionProps) {
         className="relative w-full md:absolute md:inset-0 md:z-0 md:scale-110"
         style={{ y: isDesktop ? imageY : 0 }}
       >
-        <video
-          ref={videoRef}
-          src="/hub-header-video.mp4"
-          poster={heroImageUrl}
-          muted
-          playsInline
-          autoPlay
-          preload="auto"
-          aria-label="Bishops Hull Hub Exterior"
-          className="block w-full h-auto md:absolute md:inset-0 md:h-full md:w-full md:object-cover"
-        />
+        {showVideo ? (
+          <video
+            src="/hub-sunrise.mp4"
+            poster={heroImageUrl}
+            muted
+            playsInline
+            autoPlay
+            loop
+            preload="auto"
+            disablePictureInPicture
+            disableRemotePlayback
+            onError={() => setVideoFailed(true)}
+            aria-label="Bishops Hull Hub Exterior"
+            className="block w-full h-auto md:absolute md:inset-0 md:h-full md:w-full md:object-cover"
+            style={{ transform: 'translateZ(0)' }}
+          />
+        ) : (
+          <Image
+            src={heroImageUrl}
+            alt="Bishops Hull Hub Exterior"
+            width={1920}
+            height={1080}
+            priority
+            className="block w-full h-auto md:absolute md:inset-0 md:h-full md:w-full md:object-cover"
+            data-ai-hint="modern building community hall"
+          />
+        )}
       </motion.div>
 
       {/* Darkening overlay with frosted glass effect — desktop only */}
