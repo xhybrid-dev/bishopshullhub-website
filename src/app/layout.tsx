@@ -1,5 +1,6 @@
 import type {Metadata} from 'next';
 import { Inter, Permanent_Marker } from 'next/font/google';
+import Script from 'next/script';
 import './globals.css';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -82,6 +83,18 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }}
         />
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-4T3QRR13DF"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-4T3QRR13DF');
+          `}
+        </Script>
       </head>
       <body className="font-body bg-background text-foreground flex flex-col min-h-screen antialiased">
         <FirebaseClientProvider>
