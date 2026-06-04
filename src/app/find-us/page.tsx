@@ -68,11 +68,13 @@ export default function FindUsPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">Bishops Hull Hub</p>
+                  <p className="text-sm text-muted-foreground">Bishops Hull Playing Field</p>
                   <p className="text-sm text-muted-foreground">Bishops Hull Hill</p>
+                  <p className="text-sm text-muted-foreground">Bishops Hull</p>
                   <p className="text-sm text-muted-foreground">Taunton, TA1 5EB</p>
                 </div>
               </div>
-              <CopyAddressButton address="Bishops Hull Hub, Bishops Hull Hill, Taunton, TA1 5EB" />
+              <CopyAddressButton address="Bishops Hull Hub, Bishops Hull Playing Field, Bishops Hull Hill, Bishops Hull, Taunton, TA1 5EB" />
             </div>
           </div>
 
@@ -222,6 +224,7 @@ export default function FindUsPage() {
                   Bishops Hull Hub<br />
                   Bishops Hull Playing Field<br />
                   Bishops Hull Hill<br />
+                  Bishops Hull<br />
                   Taunton, TA1 5EB
                 </p>
               </div>
@@ -237,10 +240,10 @@ export default function FindUsPage() {
                   Drop us an email and we&apos;ll help you out.
                 </p>
                 <a
-                  href="mailto:bhhubbookings@gmail.com"
+                  href="mailto:booking@bishopshullhub.co.uk"
                   className="text-sm font-medium text-primary hover:underline"
                 >
-                  bhhubbookings@gmail.com
+                  booking@bishopshullhub.co.uk
                 </a>
               </div>
             </div>

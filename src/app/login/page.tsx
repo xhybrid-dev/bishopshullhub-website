@@ -146,7 +146,7 @@ export default function LoginPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
-                      <FormControl><Input placeholder="admin@bhhub.co.uk" {...field} /></FormControl>
+                      <FormControl><Input placeholder="admin@bishopshullhub.co.uk" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -182,7 +182,7 @@ export default function LoginPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
-                      <FormControl><Input placeholder="you@bhhub.co.uk" {...field} /></FormControl>
+                      <FormControl><Input placeholder="you@bishopshullhub.co.uk" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

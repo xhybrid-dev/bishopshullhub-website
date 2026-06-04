@@ -13,8 +13,12 @@ import { Resend } from 'resend';
 import { formatUKDate } from '@/lib/utils';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const ADMIN_EMAIL = 'bhhubbookings@gmail.com';
-const TREASURER_EMAIL = 'jdlee9900@gmail.com';
+// Booking process inbox — new enquiries, bookings admin, security review CC.
+const ADMIN_EMAIL = 'booking@bishopshullhub.co.uk';
+// Post-confirmation / during-hire contact — surfaced to hirers once they're confirmed.
+const OPERATIONS_EMAIL = 'operations@bishopshullhub.co.uk';
+// Trustees — formal financial decisions (deposit return authorisations).
+const TRUSTEES_EMAIL = 'trustees@bishopshullhub.co.uk';
 
 function buildFallbackAdminEmail(enquiryData: any) {
   const displayDate = formatUKDate(enquiryData.dateRequired) || 'TBC';
@@ -33,7 +37,7 @@ Hirer:             ${enquiryData.name}
 Email:             ${enquiryData.emailAddress}
 Phone:             ${enquiryData.phoneNumber}
 Address:           ${enquiryData.postalAddress}, ${enquiryData.postcode}
-Preferred contact: ${enquiryData.preferredContact}
+Hired before:      ${enquiryData.hiredBefore || 'Not specified'}
 
 Requirements:
 ${enquiryData.additionalRequirements}`;
@@ -56,7 +60,7 @@ ${enquiryData.additionalRequirements}`;
         <p style="margin:4px 0;"><strong>Email:</strong> ${enquiryData.emailAddress}</p>
         <p style="margin:4px 0;"><strong>Phone:</strong> ${enquiryData.phoneNumber}</p>
         <p style="margin:4px 0;"><strong>Address:</strong> ${enquiryData.postalAddress}, ${enquiryData.postcode}</p>
-        <p style="margin:4px 0;"><strong>Preferred contact:</strong> ${enquiryData.preferredContact}</p>
+        <p style="margin:4px 0;"><strong>Hired before:</strong> ${enquiryData.hiredBefore || 'Not specified'}</p>
 
         <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Requirements</h2>
         <p style="margin:4px 0; white-space: pre-wrap;">${enquiryData.additionalRequirements}</p>
@@ -108,6 +112,7 @@ export async function sendEnquiryEmailAction(enquiryData: any) {
         subject: customerEmail.subject,
         html: customerEmail.htmlBody,
         text: customerEmail.textBody,
+        replyTo: ADMIN_EMAIL,
       });
     } else {
       console.log('--- EMAIL SIMULATION ---');
@@ -191,23 +196,32 @@ Review here: ${reviewUrl}
       };
     }
 
-    const recipients = [ADMIN_EMAIL];
+    const securityEmails = securityContacts
+      .map((c: any) => (c?.email || '').trim())
+      .filter((e: string) => e.length > 0);
+
+    if (securityEmails.length === 0) {
+      return { success: false, error: 'No security contacts with valid email addresses found.' };
+    }
 
     if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('re_your_api_key')) {
       const { error } = await resend.emails.send({
-        from: 'Hub Security <security@bishopshullhub.co.uk>',
-        to: recipients,
+        from: 'Hub Security <bookings@bishopshullhub.co.uk>',
+        to: securityEmails,
+        cc: [ADMIN_EMAIL],
         subject: formattedEmail.subject,
         html: formattedEmail.htmlBody,
         text: formattedEmail.textBody,
+        replyTo: ADMIN_EMAIL,
       });
-      
+
       if (error) {
         throw new Error(`Resend Error: ${error.message}`);
       }
     } else {
       console.log('--- SECURITY REVIEW EMAIL SIMULATION ---');
-      console.log('To Recipient (Restricted Mode):', recipients[0]);
+      console.log('To Security Contacts:', securityEmails.join(', '));
+      console.log('CC Admin:', ADMIN_EMAIL);
       console.log('Subject:', formattedEmail.subject);
       console.log('Review Link:', reviewUrl);
     }
@@ -417,7 +431,7 @@ Hirer Contact:   ${enquiryData.emailAddress} / ${enquiryData.phoneNumber}
     if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('re_your_api_key')) {
       const { error } = await resend.emails.send({
         from: 'Hub Bookings <bookings@bishopshullhub.co.uk>',
-        to: TREASURER_EMAIL,
+        to: TRUSTEES_EMAIL,
         subject,
         html: htmlBody,
         text: textBody,
@@ -426,7 +440,7 @@ Hirer Contact:   ${enquiryData.emailAddress} / ${enquiryData.phoneNumber}
       if (error) throw new Error(`Resend Error: ${error.message}`);
     } else {
       console.log('--- DEPOSIT RETURN EMAIL SIMULATION ---');
-      console.log('To Treasurer:', TREASURER_EMAIL);
+      console.log('To Trustees:', TRUSTEES_EMAIL);
       console.log('Subject:', subject);
       console.log(textBody);
     }

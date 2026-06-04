@@ -51,12 +51,12 @@ const localBusinessSchema = {
   '@type': ['CommunityCenter', 'EventVenue'],
   name: 'Bishops Hull Hub',
   url: 'https://bhhub.co.uk',
-  email: 'bhhubbookings@gmail.com',
+  email: 'booking@bishopshullhub.co.uk',
   description:
     'Community hub and village hall available for hire — parties, classes, meetings and events in Bishops Hull, Taunton. Modern facilities including kitchen, AV, parking and accessible access.',
   address: {
     '@type': 'PostalAddress',
-    streetAddress: 'Bishops Hull Hill',
+    streetAddress: 'Bishops Hull Playing Field, Bishops Hull Hill, Bishops Hull',
     addressLocality: 'Taunton',
     addressRegion: 'Somerset',
     postalCode: 'TA1 5EB',

@@ -25,15 +25,20 @@ export default function Footer() {
             <ul className="space-y-3">
               <li className="flex items-start gap-3 text-sm">
                 <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <span className="text-background/70">Bishops Hull Hill, Taunton TA1 5EB</span>
+                <span className="text-background/70">
+                  Bishops Hull Playing Field<br />
+                  Bishops Hull Hill<br />
+                  Bishops Hull<br />
+                  Taunton, TA1 5EB
+                </span>
               </li>
               <li className="flex items-center gap-3 text-sm">
                 <Mail className="h-4 w-4 text-primary shrink-0" />
                 <a
-                  href="mailto:bhhubbookings@gmail.com"
+                  href="mailto:booking@bishopshullhub.co.uk"
                   className="text-background/70 hover:text-background transition-colors hover:underline"
                 >
-                  bhhubbookings@gmail.com
+                  booking@bishopshullhub.co.uk
                 </a>
               </li>
               <li className="flex items-start gap-3 text-sm">

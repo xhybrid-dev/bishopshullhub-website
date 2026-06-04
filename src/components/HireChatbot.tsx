@@ -24,7 +24,7 @@ interface PreparedSubmission {
   phoneNumber: string;
   postalAddress: string;
   postcode: string;
-  preferredContact: 'Email' | 'Phone';
+  hiredBefore: 'Yes' | 'No';
   dateRequired: string;
   startTime: string;
   endTime: string;
@@ -46,7 +46,7 @@ const NUDGE_DELAY_MS = 4000;
 // chat replies (**bold**, *italic*, leading "- " / "* " bullets) plus
 // auto-linkification for the things the bot tends to mention: full URLs,
 // relative paths (e.g. /hire#booking-form), email addresses, and UK
-// mobile phone numbers (e.g. Julie's 07864 241376 — becomes a tel: link
+// mobile phone numbers (e.g. the Duty Manager's 07864 241376 — becomes a tel: link
 // so mobile users can tap to call). All output is plain React — no
 // dangerouslySetInnerHTML — and hrefs are restricted to safe schemes.
 
@@ -251,7 +251,7 @@ export default function HireChatbot() {
           {
             role: 'model',
             kind: 'system',
-            text: `Enquiry sent — reference ${enquiryId}. The bookings secretary aims to reply within 3 working days. We'll be in touch on your preferred contact method.`,
+            text: `Enquiry sent — reference ${enquiryId}. The bookings secretary aims to reply within 3 working days. We'll be in touch by email.`,
           },
         ]);
       } catch {
@@ -260,7 +260,7 @@ export default function HireChatbot() {
           {
             role: 'model',
             kind: 'system',
-            text: "I couldn't save your enquiry to our system. Please try submitting via the website form at /hire#booking-form, or email bhhubbookings@gmail.com.",
+            text: "I couldn't save your enquiry to our system. Please try submitting via the website form at /hire#booking-form, or email booking@bishopshullhub.co.uk.",
           },
         ]);
       } finally {
@@ -317,7 +317,7 @@ export default function HireChatbot() {
         ...prev,
         {
           role: 'model',
-          text: 'Sorry, I could not connect right now. Please try again or contact bhhubbookings@gmail.com.',
+          text: 'Sorry, I could not connect right now. Please try again or contact booking@bishopshullhub.co.uk.',
         },
       ]);
     } finally {

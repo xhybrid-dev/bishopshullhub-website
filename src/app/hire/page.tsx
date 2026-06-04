@@ -30,8 +30,8 @@ const formSchema = z.object({
   address: z.string().min(5, "Postal address is required"),
   postcode: z.string().min(5, "Postcode is required"),
   phone: z.string().min(10, "Valid phone number required"),
-  preferredContact: z.enum(["Email", "Phone"], {
-    required_error: "Please select a preferred contact method",
+  hiredBefore: z.enum(["Yes", "No"], {
+    required_error: "Please let us know if you've hired the Hub before",
   }),
   date: z.string().min(1, "Date is required").refine((val) => {
     if (!val) return false;
@@ -96,7 +96,7 @@ export default function HirePage() {
       address: "",
       postcode: "",
       phone: "",
-      preferredContact: "Email",
+      hiredBefore: undefined,
       date: "",
       startTime: "",
       endTime: "",
@@ -196,16 +196,36 @@ export default function HirePage() {
       return;
     }
     if (step === 2) fieldsToValidate = ['acknowledgedPolicies'];
-    if (step === 3) fieldsToValidate = ['name', 'email', 'address', 'postcode', 'phone', 'preferredContact'];
+    if (step === 3) fieldsToValidate = ['name', 'email', 'address', 'postcode', 'phone', 'hiredBefore'];
     if (step === 4) fieldsToValidate = ['typeOfEvent', 'date', 'startTime', 'endTime', 'attendance'];
 
     const isValid = await form.trigger(fieldsToValidate);
+
+    if (step === 4 && availabilityResult?.status === 'clash') {
+      toast({
+        variant: "destructive",
+        title: "Time slot unavailable",
+        description: "Your chosen time clashes with an existing booking. Please pick a different time, or contact booking@bishopshullhub.co.uk to discuss.",
+      });
+      return;
+    }
+
     if (isValid) setStep(prev => Math.min(prev + 1, totalSteps));
   };
 
   const prevStep = () => setStep(prev => Math.max(prev - 1, 1));
 
   async function onSubmit(values: FormValues) {
+    if (availabilityResult?.status === 'clash') {
+      toast({
+        variant: "destructive",
+        title: "Time slot unavailable",
+        description: "Your requested time clashes with an existing booking. Please choose a different time, or contact booking@bishopshullhub.co.uk.",
+      });
+      setStep(4);
+      return;
+    }
+
     setIsSubmitting(true);
     const enquiryId = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
     const enquiryData = {
@@ -215,7 +235,7 @@ export default function HirePage() {
       phoneNumber: values.phone,
       postalAddress: values.address,
       postcode: values.postcode,
-      preferredContact: values.preferredContact,
+      hiredBefore: values.hiredBefore,
       dateRequired: values.date,
       startTime: values.startTime,
       endTime: values.endTime,
@@ -270,7 +290,7 @@ Name: ${submittedData.name}
 Email: ${submittedData.emailAddress}
 Phone: ${submittedData.phoneNumber}
 Address: ${submittedData.postalAddress}, ${submittedData.postcode}
-Preferred Contact: ${submittedData.preferredContact}
+Hired before: ${submittedData.hiredBefore}
 
 EVENT DETAILS:
 Date: ${formatDate(submittedData.dateRequired)}
@@ -328,9 +348,9 @@ ${submittedData.additionalRequirements}
               <ol className="space-y-3">
                 {[
                   { step: "1", text: "Our volunteer bookings secretary will review your enquiry, usually within 3 working days." },
-                  { step: "2", text: "We will contact you by your preferred method to confirm availability and discuss your event." },
-                  { step: "3", text: "Once agreed, you will be asked to pay your deposit to secure the booking." },
-                  { step: "4", text: "Your date will be confirmed on our calendar once the deposit is received." },
+                  { step: "2", text: "We will contact you by email to confirm availability and discuss your event." },
+                  { step: "3", text: "If you have not hired the Hub before, we will contact you to arrange a viewing on a Saturday morning." },
+                  { step: "4", text: "Once agreed, you will be required to pay your hire fee and deposit to secure the booking." },
                 ].map((item) => (
                   <li key={item.step} className="flex gap-3 items-start">
                     <span className="shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center mt-0.5">{item.step}</span>
@@ -379,9 +399,9 @@ ${submittedData.additionalRequirements}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             {[
               { label: "Hourly Hire", value: "£18" },
-              { label: "Day Hire", value: "£140.00", description: "8+ hours within a single day" },
-              { label: "Daytime Deposit", value: "£50.00", description: "Required to confirm booking" },
-              { label: "Evening Deposit", value: "£100.00", description: "Required to confirm booking" },
+              { label: "Day Hire", value: "£140.00", description: "8+ hours within the same day" },
+              { label: "Daytime Deposit", value: "£50.00", description: "Bookings ending by 8pm" },
+              { label: "Evening Deposit", value: "£100.00", description: "Bookings beyond 8pm" },
             ].map((item, idx) => (
               <Card key={idx} className="border-none shadow-md bg-white overflow-hidden">
                 <CardContent className="p-3 md:p-6 flex flex-col items-center justify-center text-center">
@@ -558,21 +578,27 @@ ${submittedData.additionalRequirements}
                           </FormItem>
                         )}
                       />
+                      <div className="md:col-span-2 p-3 rounded-xl bg-muted/40 border border-border flex items-start gap-2">
+                        <Mail className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                        <p className="text-xs text-muted-foreground">
+                          We will contact you by <strong className="text-foreground">email</strong> regarding your enquiry. Please make sure the address above is correct.
+                        </p>
+                      </div>
                       <FormField
                         control={form.control}
-                        name="preferredContact"
+                        name="hiredBefore"
                         render={({ field }) => (
                           <FormItem className="md:col-span-2">
-                            <FormLabel>Preferred Contact Method</FormLabel>
+                            <FormLabel>Have you hired the Hub before?</FormLabel>
                             <FormControl>
-                              <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4 pt-1">
+                              <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-4 pt-1">
                                 <FormItem className="flex items-center space-x-2 space-y-0">
-                                  <FormControl><RadioGroupItem value="Email" /></FormControl>
-                                  <FormLabel className="font-normal flex items-center gap-1 cursor-pointer"><Mail className="h-4 w-4" /> Email</FormLabel>
+                                  <FormControl><RadioGroupItem value="Yes" /></FormControl>
+                                  <FormLabel className="font-normal cursor-pointer">Yes, I have hired the Hub before</FormLabel>
                                 </FormItem>
                                 <FormItem className="flex items-center space-x-2 space-y-0">
-                                  <FormControl><RadioGroupItem value="Phone" /></FormControl>
-                                  <FormLabel className="font-normal flex items-center gap-1 cursor-pointer"><PhoneIcon className="h-4 w-4" /> Phone</FormLabel>
+                                  <FormControl><RadioGroupItem value="No" /></FormControl>
+                                  <FormLabel className="font-normal cursor-pointer">No, this is my first time</FormLabel>
                                 </FormItem>
                               </RadioGroup>
                             </FormControl>
@@ -635,7 +661,7 @@ ${submittedData.additionalRequirements}
                           <Info className="h-4 w-4" />
                           Deposit Information
                         </div>
-                        <p className="text-xs text-muted-foreground">A deposit is required to confirm your booking. Evening events require a <strong className="text-foreground">£100 deposit</strong>; all other bookings require a <strong className="text-foreground">£50 deposit</strong>. Deposits are payable on confirmation and are refundable subject to the hire conditions.</p>
+                        <p className="text-xs text-muted-foreground">A deposit is required to confirm your booking. Bookings that extend <strong className="text-foreground">beyond 8pm</strong> require a <strong className="text-foreground">£100 deposit</strong>; all other bookings require a <strong className="text-foreground">£50 deposit</strong>. Deposits are payable on confirmation and are refundable within 5 working days after your hire, subject to the hire conditions.</p>
                       </div>
 
                       <FormField
@@ -714,13 +740,13 @@ ${submittedData.additionalRequirements}
                             <div className="text-right">
                               <span className="font-bold text-primary text-sm md:text-base">£{costInfo.cost.toFixed(2)}</span>
                               {costInfo.isDay && (
-                                <span className="block text-xs text-muted-foreground">Day rate (8h+ cap)</span>
+                                <span className="block text-xs text-muted-foreground">Day rate (8+ hours within the same day)</span>
                               )}
                             </div>
                           </div>
                           {!costInfo.isDay && (
                             <p className="text-xs text-muted-foreground">
-                              Estimated hire cost at £18/hr. Bookings over 8 hours are capped at £140.
+                              Estimated hire cost at £18/hr. Bookings of 8 or more hours within the same day are capped at £140.
                             </p>
                           )}
                         </div>
@@ -738,7 +764,27 @@ ${submittedData.additionalRequirements}
                         {!isCheckingAvailability && availabilityResult?.status === 'available' && (
                           <div className="flex items-center gap-2 p-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-xs">
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
-                            <span><strong>This time slot looks free.</strong> No conflicts found on the live calendar.</span>
+                            <span><strong>This time slot is Available.</strong> No conflicts found on the live calendar.</span>
+                          </div>
+                        )}
+
+                        {!isCheckingAvailability && availabilityResult?.status === 'buffer-warning' && (
+                          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
+                            <div className="flex items-center gap-2 text-amber-800 text-xs font-bold">
+                              <AlertTriangle className="h-4 w-4 shrink-0" />
+                              Time slot is close to another booking.
+                            </div>
+                            <p className="text-xs text-amber-800 pl-6">
+                              We recommend leaving at least <strong>15 minutes</strong> between bookings for set-up and clear-down. There is another booking within 15 minutes of your requested time:
+                            </p>
+                            <ul className="space-y-1 pl-6">
+                              {availabilityResult.adjacent.map((b, i) => (
+                                <li key={i} className="text-xs text-amber-700">
+                                  <strong>{b.summary}</strong> — {new Date(b.start).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} to {new Date(b.end).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                </li>
+                              ))}
+                            </ul>
+                            <p className="text-xs text-amber-700 pl-6">You can still proceed with this enquiry, but the bookings team may contact you to adjust the times.</p>
                           </div>
                         )}
 
@@ -755,12 +801,14 @@ ${submittedData.additionalRequirements}
                                 </li>
                               ))}
                             </ul>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pl-6 pt-1">
-                              <p className="text-xs text-red-600 flex-1">Please choose a different date or time.</p>
+                            <div className="flex flex-col gap-2 pl-6 pt-1">
+                              <p className="text-xs text-red-700 font-semibold">
+                                This enquiry can't be submitted while it clashes with an existing booking. Please choose a different date or time, or contact the hire manager at <a href="mailto:booking@bishopshullhub.co.uk" className="underline">booking@bishopshullhub.co.uk</a> to discuss alternatives.
+                              </p>
                               <button
                                 type="button"
                                 onClick={() => setStep(1)}
-                                className="text-xs font-semibold text-red-700 underline underline-offset-2 hover:text-red-900 shrink-0"
+                                className="text-xs font-semibold text-red-700 underline underline-offset-2 hover:text-red-900 self-start"
                               >
                                 ← View schedule (Step 1)
                               </button>
@@ -832,7 +880,7 @@ ${submittedData.additionalRequirements}
                         {step === 1 ? "Start" : "Next"} <ArrowRight className="ml-1 h-4 w-4" />
                       </Button>
                     ) : (
-                      <Button type="submit" className="bg-primary hover:bg-primary/90 px-8" disabled={isSubmitting}>
+                      <Button type="submit" className="bg-primary hover:bg-primary/90 px-8" disabled={isSubmitting || availabilityResult?.status === 'clash'}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Submit Enquiry
                       </Button>

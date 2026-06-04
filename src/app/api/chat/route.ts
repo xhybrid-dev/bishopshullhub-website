@@ -6,15 +6,16 @@ import { SITE_CONTACT } from '@/lib/site-contact';
 
 const VENUE_FACTS = `
 VENUE: Bishops Hull Hub
-Address: Bishops Hull Playing Field, Bishops Hull Hill, Taunton, TA1 5EB
-Bookings contact: bhhubbookings@gmail.com (aim to reply within 3 working days)
-General enquiries: info@bhhub.co.uk
+Address: Bishops Hull Hub, Bishops Hull Playing Field, Bishops Hull Hill, Bishops Hull, Taunton, TA1 5EB
+Bookings contact: booking@bishopshullhub.co.uk (aim to reply within 3 working days)
+Confirmed hirer / during-hire contact: operations@bishopshullhub.co.uk (plus the Duty Manager phone, below)
+Formal / committee enquiries: trustees@bishopshullhub.co.uk
 Website hire page: https://bhhub.co.uk/hire
 
 ON-SITE CONTACT (DURING A HIRE — NOT FOR NEW BOOKINGS):
 ${SITE_CONTACT.name} on ${SITE_CONTACT.displayPhone}.
 This number is for hirers who are already on-site and have an issue during their hire (access, facilities, anything urgent).
-IMPORTANT: Never give this number out as a "booking contact". If someone wants to make or change a booking, point them to bhhubbookings@gmail.com or the website form at /hire#booking-form. Only share ${SITE_CONTACT.name}'s number when the person is asking about an issue during a hire, or what to do if there's a problem on the day.
+IMPORTANT: Never give this number out as a "booking contact". If someone wants to make or change a booking, point them to booking@bishopshullhub.co.uk or the website form at /hire#booking-form. Only share ${SITE_CONTACT.name}'s number when the person is asking about an issue during a hire, or what to do if there's a problem on the day.
 
 HALL SPECIFICATIONS:
 - Main hall: 14.8m × 9m, vaulted sloping ceiling (maximum height 4m), capacity up to 110 people
@@ -37,9 +38,9 @@ PRICING:
 - Day rate: £140 for 8 or more consecutive hours within a single day
 - Regular/repeat bookings: monthly invoices with 14-day payment terms
 
-DEPOSITS (refunded within 7 days after the event, subject to inspection):
-- Daytime booking (hire ends before 20:00): £50 refundable deposit
-- Evening booking (hire ends at or after 20:00): £100 refundable deposit
+DEPOSITS (refunded within 5 working days after the event, subject to inspection):
+- Daytime booking (hire ends at or before 20:00): £50 refundable deposit
+- Evening booking (hire extends beyond 20:00): £100 refundable deposit
 
 CLEANING AND DAMAGE COSTS (if applicable):
 - Cleaning charge: £15/hour (daytime), £20/hour (evening); minimum 1 hour; deducted from deposit
@@ -62,15 +63,20 @@ FIRE SAFETY:
 
 ENQUIRY AND BOOKING PROCESS:
 1. Check availability using the live calendar or ask the assistant
-2. Submit a hire enquiry at https://bhhub.co.uk/hire
+2. Submit a hire enquiry at https://bhhub.co.uk/hire — all follow-up contact is by email
 3. The bookings secretary reviews the enquiry (within 3 working days)
-4. On approval: deposit invoice is sent, hirer signs the hire agreement
-5. Full payment is due 14 days before the event (or immediately for late bookings)
+4. If the hirer has not hired the Hub before, a viewing is arranged on a Saturday morning
+5. Once agreed, the hirer is required to pay the hire fee and deposit to secure the booking
+6. Full payment is due 14 days before the event (or immediately for late bookings)
+
+CANCELLATION POLICY:
+- Cancellations more than 4 weeks before the booking date: full refund of the hire fee
+- Cancellations less than 4 weeks before the booking date: hire fee is not refundable, only the deposit is returned
 
 COMMUNITY:
 - 100 Club: £5/month membership with a monthly prize draw; profits support Hub improvements
 - "Buy a Brick" memorial scheme available
-- Volunteer opportunities available — contact info@bhhub.co.uk
+- Volunteer opportunities available — contact trustees@bishopshullhub.co.uk
 `.trim();
 
 function buildSystemPromptPrefix(today: Date): string {
@@ -94,11 +100,11 @@ SCOPE — you ONLY answer questions about:
 - How to contact the bookings team or submit an enquiry
 
 If a user asks about anything unrelated to Bishops Hull Hub hire, politely explain:
-"I can only help with Bishops Hull Hub hire enquiries. For other questions, please contact the team at info@bhhub.co.uk."
+"I can only help with Bishops Hull Hub hire enquiries. For other questions, please contact the trustees at trustees@bishopshullhub.co.uk."
 
 FACTUAL DISCIPLINE:
 - Answer only from the venue facts and FAQ data in this prompt
-- If you are not certain of an answer, say: "I don't have that information — please contact bhhubbookings@gmail.com and the team will be happy to help."
+- If you are not certain of an answer, say: "I don't have that information — please contact booking@bishopshullhub.co.uk and the team will be happy to help."
 - Never guess, estimate, or make up information that is not stated here
 - Prices, capacities, and rules are exact — do not paraphrase them in a way that changes the meaning
 

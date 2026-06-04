@@ -21,7 +21,7 @@ import { getLiveCalendarEventsAction, type LiveEvent } from '@/app/actions/get-c
 import type { ClashingEvent } from '@/app/actions/check-availability';
 import { EnquiryCalendarView } from '@/components/admin/EnquiryCalendarView';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { format, startOfToday, parseISO, isSameDay } from 'date-fns';
+import { format, startOfToday, parseISO, isSameDay, subDays } from 'date-fns';
 
 const STATUS_COLUMNS = [
   { id: 'Pending', label: 'Enquiry Received', color: 'bg-amber-500', icon: Clock3 },
@@ -56,8 +56,8 @@ const FAQ_CAT_LABELS: Record<string, string> = {
   safety: 'Safety', rules: 'Rules & Policies',
 };
 const DEFAULT_FAQS = [
-  { cat: 'hire',   q: "How do I contact someone when there's an issue during my hire?",           a: "For any issues during your hire, please call Julie on 07864 241376. This number is for on-site enquiries only — please do not use it for new bookings.", order: 1 },
-  { cat: 'access', q: 'What is the height of the gate height barrier?',                           a: 'The height barrier is 2m high. If you expect vehicles that will exceed this height, please contact the booking manager. For on-the-day access issues, call Julie on 07864 241376 (site enquiries only — not for new bookings).', order: 2 },
+  { cat: 'hire',   q: "How do I contact someone when there's an issue during my hire?",           a: "For any issues during your hire, please call the Duty Manager on 07864 241376. This number is for on-site enquiries only — please do not use it for new bookings.", order: 1 },
+  { cat: 'access', q: 'What is the height of the gate height barrier?',                           a: 'The height barrier is 2m high. If you expect vehicles that will exceed this height, please contact the booking manager. For on-the-day access issues, call the Duty Manager on 07864 241376 (site enquiries only — not for new bookings).', order: 2 },
   { cat: 'hire',   q: 'What do I do with any rubbish generated during my hire?',                  a: 'We ask all hirers to take any rubbish generated during their hire away with them to keep the Hub clean for everyone.', order: 3 },
   { cat: 'venue',  q: 'What is the total number of people allowed in the hall?',                  a: 'The maximum capacity for the hall is 110 people.', order: 4 },
   { cat: 'rules',  q: "Is there a 'Premises' licence for the Hub?",                               a: 'No, the Hub does not hold a general premises licence.', order: 5 },
@@ -135,10 +135,26 @@ export default function AdminPortal() {
     return () => unsub();
   }, [firestore, hasAdminAccess]);
 
-  const depositEnquiries = useMemo(() => {
-    if (!enquiries) return [];
-    const today = startOfToday();
+  // Hide any booking whose event date is more than 2 weeks in the past.
+  // The admin dashboard only needs upcoming bookings and recent past hires
+  // (e.g. for deposit returns, which are processed within 5 working days).
+  const visibleEnquiries = useMemo(() => {
+    if (!enquiries) return null;
+    const cutoff = subDays(startOfToday(), 14);
     return enquiries.filter(e => {
+      if (!e.dateRequired) return true;
+      try {
+        return parseISO(e.dateRequired) >= cutoff;
+      } catch {
+        return true;
+      }
+    });
+  }, [enquiries]);
+
+  const depositEnquiries = useMemo(() => {
+    if (!visibleEnquiries) return [];
+    const today = startOfToday();
+    return visibleEnquiries.filter(e => {
       if (e.confirmationStatus !== 'Submitted') return false;
       try {
         return parseISO(e.dateRequired) < today;
@@ -146,7 +162,7 @@ export default function AdminPortal() {
         return false;
       }
     }).sort((a, b) => b.dateRequired.localeCompare(a.dateRequired));
-  }, [enquiries]);
+  }, [visibleEnquiries]);
 
   // Pull the live Hallmaster feed once admin access is confirmed,
   // so we can overlay it on the calendar and detect clashes against enquiries.
@@ -188,9 +204,9 @@ export default function AdminPortal() {
   // except the "Hire Complete" column. These are the bookings the manager
   // still needs to track for clashes.
   const activeEnquiries = useMemo(() => {
-    if (!enquiries) return [];
+    if (!visibleEnquiries) return [];
     const today = startOfToday();
-    return enquiries.filter(e => {
+    return visibleEnquiries.filter(e => {
       const status = e.status || 'Pending';
       const hirerConfirmed = e.confirmationStatus === 'Submitted';
       let isPast = false;
@@ -201,7 +217,7 @@ export default function AdminPortal() {
       if (status === 'Rejected') return false;
       return true;
     });
-  }, [enquiries]);
+  }, [visibleEnquiries]);
 
   // Build a clash map: { enquiryId: ClashingEvent[] } using the same overlap
   // rule as check-availability (requestedStart < eventEnd && requestedEnd > eventStart).
@@ -491,7 +507,7 @@ export default function AdminPortal() {
                 isLiveLoading={isLiveLoading}
                 onEditEnquiry={setEditingEnquiry}
               />
-            ) : enquiries && enquiries.length > 0 ? (
+            ) : visibleEnquiries && visibleEnquiries.length > 0 ? (
               viewMode === 'kanban' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
                   {STATUS_COLUMNS.map((col) => {
@@ -511,7 +527,7 @@ export default function AdminPortal() {
                       if (col.id === 'Confirmed') return status === 'Confirmed' && !isPastDate(e);
                       return status === col.id;
                     };
-                    const items = enquiries.filter(inColumn);
+                    const items = visibleEnquiries.filter(inColumn);
                     return (
                       <div key={col.id} className="flex flex-col gap-4">
                         <div className="flex items-center gap-2 px-2">
@@ -530,7 +546,7 @@ export default function AdminPortal() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {enquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} isList />)}
+                  {visibleEnquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} isList />)}
                 </div>
               )
             ) : (
@@ -1257,7 +1273,7 @@ const EDIT_FIELDS: Array<{ key: string; label: string; type?: 'text' | 'email' |
   { key: 'name', label: 'Hirer Name' },
   { key: 'emailAddress', label: 'Email', type: 'email' },
   { key: 'phoneNumber', label: 'Phone', type: 'tel' },
-  { key: 'preferredContact', label: 'Preferred Contact', type: 'select', options: ['Email', 'Phone'] },
+  { key: 'hiredBefore', label: 'Hired the Hub before', type: 'select', options: ['Yes', 'No'] },
   { key: 'postalAddress', label: 'Postal Address' },
   { key: 'postcode', label: 'Postcode' },
   { key: 'typeOfEvent', label: 'Type of Event' },

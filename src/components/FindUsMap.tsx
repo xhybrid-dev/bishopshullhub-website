@@ -65,7 +65,9 @@ export function FindUsMap() {
             <div className="p-1 min-w-[180px]">
               <p className="font-semibold text-gray-900 text-sm">Bishops Hull Hub</p>
               <p className="text-xs text-gray-500 mt-0.5">Bishops Hull Playing Field</p>
-              <p className="text-xs text-gray-500">Bishops Hull Hill, Taunton TA1 5EB</p>
+              <p className="text-xs text-gray-500">Bishops Hull Hill</p>
+              <p className="text-xs text-gray-500">Bishops Hull</p>
+              <p className="text-xs text-gray-500">Taunton, TA1 5EB</p>
               <a
                 href="https://maps.app.goo.gl/BBxK3zLuSw2dXfpNA"
                 target="_blank"

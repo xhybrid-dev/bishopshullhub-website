@@ -8,7 +8,7 @@ const PHASES = [
   {
     label: 'Your Enquiry',
     steps: [
-      { n: 1,  title: 'Check availability',                   desc: 'Confirm your date and time is free on the live calendar.' },
+      { n: 1,  title: 'Check availability',                   desc: 'Confirm your date and time is available on the live calendar.' },
       { n: 2,  title: 'Submit your enquiry form',             desc: 'Fill in your details using the form on the Hire page.' },
     ],
   },
@@ -28,7 +28,7 @@ const PHASES = [
     steps: [
       { n: 9,  title: 'Pay the refundable deposit',           desc: 'Due 2 weeks before your hire date (£50 daytime / £100 evening).' },
       { n: 10, title: 'Our team welcomes you',                desc: 'A member of the team will be there to let you in and lock up.' },
-      { n: 11, title: 'Deposit returned',                     desc: 'Returned within 3 days, subject to the condition of the Hub.' },
+      { n: 11, title: 'Deposit returned',                     desc: 'Returned within 5 working days, subject to the condition of the Hub.' },
     ],
   },
 ];

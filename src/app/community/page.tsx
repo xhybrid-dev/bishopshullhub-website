@@ -219,7 +219,7 @@ export default function CommunityPage() {
           Get in touch with the management committee today.
         </p>
         <Button asChild size="lg" className="rounded-2xl px-12 h-14 text-lg shadow-xl">
-          <a href="mailto:info@bhhub.co.uk">Contact the Committee</a>
+          <a href="mailto:trustees@bishopshullhub.co.uk">Contact the Committee</a>
         </Button>
       </section>
     </div>

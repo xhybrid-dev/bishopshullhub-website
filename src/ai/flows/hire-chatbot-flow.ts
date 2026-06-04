@@ -19,8 +19,17 @@ const checkAvailabilityTool = ai.defineTool(
         .describe('End time of the requested hire in HH:mm format, e.g. "14:00"'),
     }),
     outputSchema: z.object({
-      status: z.enum(['available', 'clash', 'error']),
+      status: z.enum(['available', 'buffer-warning', 'clash', 'error']),
       clashes: z
+        .array(
+          z.object({
+            summary: z.string(),
+            start: z.string(),
+            end: z.string(),
+          })
+        )
+        .optional(),
+      adjacent: z
         .array(
           z.object({
             summary: z.string(),
@@ -34,7 +43,20 @@ const checkAvailabilityTool = ai.defineTool(
   },
   async ({ date, startTime, endTime }) => {
     try {
-      return await checkAvailabilityAction(date, startTime, endTime);
+      const result = await checkAvailabilityAction(date, startTime, endTime);
+      // Flatten the discriminated union into the tool's flat schema so the
+      // Gemini-Genkit roundtrip can serialise it cleanly.
+      switch (result.status) {
+        case 'clash':
+          return { status: 'clash' as const, clashes: result.clashes };
+        case 'buffer-warning':
+          return { status: 'buffer-warning' as const, adjacent: result.adjacent };
+        case 'error':
+          return { status: 'error' as const, message: result.message };
+        case 'available':
+        default:
+          return { status: 'available' as const };
+      }
     } catch (err) {
       console.error('[chatbot] checkAvailability tool failure:', err);
       return { status: 'error' as const, message: 'Could not reach the live calendar right now.' };
@@ -76,7 +98,7 @@ const HireEnquiryFieldsSchema = z.object({
   phone: z.string().min(10),
   postalAddress: z.string().min(5),
   postcode: z.string().min(5),
-  preferredContact: z.enum(['Email', 'Phone']),
+  hiredBefore: z.enum(['Yes', 'No']),
   dateRequired: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Time must be HH:mm'),
   endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Time must be HH:mm'),
@@ -93,7 +115,7 @@ const PreparedEnquiryPayloadSchema = z.object({
   phoneNumber: z.string(),
   postalAddress: z.string(),
   postcode: z.string(),
-  preferredContact: z.enum(['Email', 'Phone']),
+  hiredBefore: z.enum(['Yes', 'No']),
   dateRequired: z.string(),
   startTime: z.string(),
   endTime: z.string(),
@@ -204,7 +226,7 @@ const prepareHireEnquiryTool = ai.defineTool(
         phoneNumber: fields.phone,
         postalAddress: fields.postalAddress,
         postcode: fields.postcode,
-        preferredContact: fields.preferredContact,
+        hiredBefore: fields.hiredBefore,
         dateRequired: fields.dateRequired,
         startTime: fields.startTime,
         endTime: fields.endTime,
@@ -264,7 +286,7 @@ export const hireChatbotFlow = ai.defineFlow(
       console.error('[chatbot] ai.generate failed:', err);
       return {
         response:
-          "I'm having trouble reaching the booking assistant right now. Please try again in a moment, or email bhhubbookings@gmail.com for booking enquiries.",
+          "I'm having trouble reaching the booking assistant right now. Please try again in a moment, or email booking@bishopshullhub.co.uk for booking enquiries.",
       };
     }
 

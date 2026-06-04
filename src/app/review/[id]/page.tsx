@@ -197,7 +197,7 @@ export default function SecurityReviewPage({ params }: { params: Promise<{ id: s
                 Approve Event
               </Button>
               <Button asChild variant="outline" className="flex-1 h-14 text-lg">
-                <a href={`mailto:bhhubbookings@gmail.com?subject=RE: Booking Query ID ${enquiry.id}`}>
+                <a href={`mailto:booking@bishopshullhub.co.uk?subject=RE: Booking Query ID ${enquiry.id}`}>
                   Email Admin
                 </a>
               </Button>

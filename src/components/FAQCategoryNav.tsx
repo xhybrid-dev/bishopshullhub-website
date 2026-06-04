@@ -107,7 +107,7 @@ export default function FAQCategoryNav({
           <div className="border-t border-border my-3" />
 
           <a
-            href="mailto:bhhubbookings@gmail.com"
+            href="mailto:booking@bishopshullhub.co.uk"
             className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-primary/7 border border-primary/15 text-primary text-sm font-semibold hover:bg-primary/12 transition-colors"
           >
             <Mail className="h-3.5 w-3.5 flex-shrink-0" />

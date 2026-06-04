@@ -248,15 +248,21 @@ export default function HireConfirmationPage({ params }: { params: Promise<{ id:
               <Phone className="h-5 w-5 text-amber-900" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-900">Save This Number</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-900">Save These Contacts</p>
               <p className="text-sm text-amber-950 mt-1">
-                For any issues <span className="font-bold">during your hire</span>, call {SITE_CONTACT.name}:
+                For any issues <span className="font-bold">during your hire</span>, contact the {SITE_CONTACT.name}:
               </p>
               <a
                 href={SITE_CONTACT.telHref}
                 className="inline-block mt-2 text-lg font-bold text-amber-900 hover:underline"
               >
                 {SITE_CONTACT.displayPhone}
+              </a>
+              <a
+                href={SITE_CONTACT.emailHref}
+                className="block mt-1 text-sm font-bold text-amber-900 hover:underline"
+              >
+                {SITE_CONTACT.email}
               </a>
               <p className="text-[11px] text-amber-800 mt-1.5 font-medium">
                 {SITE_CONTACT.notForBookings}
@@ -452,7 +458,7 @@ export default function HireConfirmationPage({ params }: { params: Promise<{ id:
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold uppercase tracking-wider text-amber-900">Site Contact — During Your Hire</p>
             <p className="text-sm text-amber-950 mt-1">
-              If you have any issues on the day of your hire (access, facilities, anything on-site), call {SITE_CONTACT.name}:
+              If you have any issues on the day of your hire (access, facilities, anything on-site), contact the {SITE_CONTACT.name}:
             </p>
             <a
               href={SITE_CONTACT.telHref}
@@ -460,15 +466,21 @@ export default function HireConfirmationPage({ params }: { params: Promise<{ id:
             >
               {SITE_CONTACT.displayPhone}
             </a>
+            <a
+              href={SITE_CONTACT.emailHref}
+              className="block mt-1 text-sm font-bold text-amber-900 hover:underline"
+            >
+              {SITE_CONTACT.email}
+            </a>
             <p className="text-[11px] text-amber-800 mt-1.5 font-medium">
-              {SITE_CONTACT.notForBookings}. For booking enquiries, please email bhhubbookings@gmail.com.
+              {SITE_CONTACT.notForBookings}. For booking enquiries, please email booking@bishopshullhub.co.uk.
             </p>
           </div>
         </div>
       </div>
 
       <div className="text-center mt-6 text-xs text-muted-foreground">
-        Bishops Hull Hub &bull; bhhubbookings@gmail.com
+        Bishops Hull Hub &bull; booking@bishopshullhub.co.uk
       </div>
     </div>
   );

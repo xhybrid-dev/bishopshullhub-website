@@ -11,8 +11,12 @@ export type ClashingEvent = {
 
 export type AvailabilityResult =
   | { status: 'available' }
+  | { status: 'buffer-warning'; adjacent: ClashingEvent[] }
   | { status: 'clash'; clashes: ClashingEvent[] }
   | { status: 'error'; message: string };
+
+const BUFFER_MINUTES = 15;
+const BUFFER_MS = BUFFER_MINUTES * 60 * 1000;
 
 /**
  * Warms the iCal cache without returning any data.
@@ -28,9 +32,12 @@ export async function prefetchAvailabilityCache(): Promise<void> {
 
 /**
  * Checks a requested date + time window against the live Hallmaster iCal feed.
- * Returns whether the slot is free, clashing, or whether the check failed.
+ * Returns whether the slot is free, sits within 15 minutes of another booking,
+ * clashes outright, or whether the check failed.
  *
  * Overlap rule: two intervals clash when requestedStart < existingEnd AND requestedEnd > existingStart.
+ * Buffer rule: a non-clashing event whose end is within 15 minutes of requestedStart, or whose
+ * start is within 15 minutes of requestedEnd, triggers a buffer warning.
  */
 export async function checkAvailabilityAction(
   date: string,       // "YYYY-MM-DD"
@@ -44,6 +51,7 @@ export async function checkAvailabilityAction(
     const events = await getHallmasterEvents();
 
     const clashes: ClashingEvent[] = [];
+    const adjacent: ClashingEvent[] = [];
 
     Object.values(events).forEach((event) => {
       if (event.type !== 'VEVENT') return;
@@ -53,17 +61,31 @@ export async function checkAvailabilityAction(
 
       if (!isSameDay(eventStart, requestedStart)) return;
 
+      const entry: ClashingEvent = {
+        summary: event.summary || 'Existing booking',
+        start: eventStart.toISOString(),
+        end: eventEnd.toISOString(),
+      };
+
       if (requestedStart < eventEnd && requestedEnd > eventStart) {
-        clashes.push({
-          summary: event.summary || 'Existing booking',
-          start: eventStart.toISOString(),
-          end: eventEnd.toISOString(),
-        });
+        clashes.push(entry);
+        return;
+      }
+
+      // Non-clashing — check the 15-minute buffer.
+      const gapBefore = requestedStart.getTime() - eventEnd.getTime();   // existing ends before us
+      const gapAfter  = eventStart.getTime() - requestedEnd.getTime();   // existing starts after us
+      if ((gapBefore >= 0 && gapBefore < BUFFER_MS) || (gapAfter >= 0 && gapAfter < BUFFER_MS)) {
+        adjacent.push(entry);
       }
     });
 
     if (clashes.length > 0) {
       return { status: 'clash', clashes };
+    }
+
+    if (adjacent.length > 0) {
+      return { status: 'buffer-warning', adjacent };
     }
 
     return { status: 'available' };

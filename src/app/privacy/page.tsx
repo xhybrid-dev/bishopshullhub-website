@@ -24,7 +24,7 @@ export default function PrivacyPage() {
 
         <h2 className="text-2xl font-bold text-primary mt-8">Contact Us</h2>
         <p>
-          If you have any questions about our privacy policy, please contact us at <a href="mailto:bhhubbookings@gmail.com" className="text-primary hover:underline">bhhubbookings@gmail.com</a>.
+          If you have any questions about our privacy policy, please contact the trustees at <a href="mailto:trustees@bishopshullhub.co.uk" className="text-primary hover:underline">trustees@bishopshullhub.co.uk</a>.
         </p>
       </div>
     </div>

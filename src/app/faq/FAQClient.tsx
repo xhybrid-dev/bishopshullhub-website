@@ -367,12 +367,12 @@ export default function FAQClient() {
             If you could not find what you were looking for, our volunteer bookings secretary will be happy to help.
           </p>
           <Button asChild size="lg" variant="secondary" className="text-base rounded-xl h-14 px-8 font-bold shadow-lg">
-            <a href="mailto:bhhubbookings@gmail.com">
+            <a href="mailto:booking@bishopshullhub.co.uk">
               Contact the Bookings Secretary
             </a>
           </Button>
           <p className="text-sm opacity-50">
-            bhhubbookings@gmail.com · We aim to reply within 3 working days
+            booking@bishopshullhub.co.uk · We aim to reply within 3 working days
           </p>
 
           <div className="mt-6 pt-6 border-t border-white/20 max-w-xl mx-auto">

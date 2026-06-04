@@ -51,7 +51,7 @@ If you have any questions, please reply to this email.
 
 Warm regards,
 Bishops Hull Hub Booking Team
-bhhubbookings@gmail.com`;
+booking@bishopshullhub.co.uk`;
 
   const htmlBody = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -87,7 +87,7 @@ bhhubbookings@gmail.com`;
           <p style="margin:4px 0 0;font-weight:bold;">The Bishops Hull Hub Team</p>
         </td></tr>
         <tr><td style="background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 40px;text-align:center;">
-          <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#94a3b8;">Bishops Hull Hub &bull; bhhubbookings@gmail.com</p>
+          <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#94a3b8;">Bishops Hull Hub &bull; booking@bishopshullhub.co.uk</p>
         </td></tr>
       </table>
     </td></tr>
@@ -226,13 +226,14 @@ If you have any questions or queries please get in contact.
 ----------------------------------------
 SITE CONTACT — DURING YOUR HIRE
 ${SITE_CONTACT.name}: ${SITE_CONTACT.displayPhone}
+Email: ${SITE_CONTACT.email}
 For any on-site issues during your hire (access, facilities, anything urgent).
 ${SITE_CONTACT.notForBookings}.
 ----------------------------------------
 
 Kind regards,
 Bishops Hull Hub
-Booking enquiries: bhhubbookings@gmail.com`;
+Booking enquiries: booking@bishopshullhub.co.uk`;
 
   const htmlBody = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -256,8 +257,9 @@ Booking enquiries: bhhubbookings@gmail.com`;
           <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border:2px solid #fcd34d;border-radius:8px;margin:24px 0 0;">
             <tr><td style="padding:18px 22px;font-family:Arial,sans-serif;">
               <p style="margin:0 0 6px;font-size:11px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;color:#78350f;">Site Contact — During Your Hire</p>
-              <p style="margin:0 0 8px;font-size:14px;color:#451a03;">For any issues on the day (access, facilities, anything on-site), call <strong>${SITE_CONTACT.name}</strong>:</p>
+              <p style="margin:0 0 8px;font-size:14px;color:#451a03;">For any issues on the day (access, facilities, anything on-site), contact the <strong>${SITE_CONTACT.name}</strong>:</p>
               <p style="margin:0;"><a href="${SITE_CONTACT.telHref}" style="display:inline-block;font-size:20px;font-weight:bold;color:#78350f;text-decoration:none;">${SITE_CONTACT.displayPhone}</a></p>
+              <p style="margin:4px 0 0;font-size:14px;"><a href="${SITE_CONTACT.emailHref}" style="color:#78350f;font-weight:bold;">${SITE_CONTACT.email}</a></p>
               <p style="margin:8px 0 0;font-size:11px;font-weight:bold;color:#92400e;">${SITE_CONTACT.notForBookings}</p>
             </td></tr>
           </table>
@@ -265,7 +267,7 @@ Booking enquiries: bhhubbookings@gmail.com`;
         <tr><td style="padding:0 40px 36px;color:#1e293b;font-size:16px;line-height:1.7;">
           <p style="margin:0;">Kind regards,</p>
           <p style="margin:4px 0 0;font-weight:bold;">Bishops Hull Hub</p>
-          <p style="margin:4px 0 0;font-size:13px;color:#64748b;">Booking enquiries: <a href="mailto:bhhubbookings@gmail.com" style="color:#1a4d46;">bhhubbookings@gmail.com</a></p>
+          <p style="margin:4px 0 0;font-size:13px;color:#64748b;">Booking enquiries: <a href="mailto:booking@bishopshullhub.co.uk" style="color:#1a4d46;">booking@bishopshullhub.co.uk</a></p>
         </td></tr>
         <tr><td style="background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 40px;text-align:center;">
           <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#94a3b8;">Bishops Hull Hub &bull; Community Village Hall &bull; Taunton, Somerset</p>
