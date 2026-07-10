@@ -31,6 +31,8 @@ export async function getLiveCalendarEventsAction(options: { force?: boolean } =
 
     Object.values(events).forEach((event) => {
       if (event.type === 'VEVENT') {
+        if (event.status?.toUpperCase() === 'CANCELLED') return;
+
         const start = new Date(event.start);
 
         if (isWithinInterval(start, { start: rangeStart, end: rangeEnd })) {
