@@ -1,7 +1,7 @@
 
 'use server';
 
-import { startOfWeek, isWithinInterval, subDays, addMonths, format } from 'date-fns';
+import { startOfWeek, subDays, addMonths, format } from 'date-fns';
 import { getHallmasterEvents } from '@/lib/hallmaster-ical';
 
 export type LiveEvent = {
@@ -34,8 +34,11 @@ export async function getLiveCalendarEventsAction(options: { force?: boolean } =
         if (event.status?.toUpperCase() === 'CANCELLED') return;
 
         const start = new Date(event.start);
+        const end = new Date(event.end);
 
-        if (isWithinInterval(start, { start: rangeStart, end: rangeEnd })) {
+        // Keep any event overlapping the window, so multi-day events that
+        // started before the window still appear on the days they cover.
+        if (start <= rangeEnd && end >= rangeStart) {
           const rawDescription = event.description || '';
 
           const cleanedDescription = rawDescription
@@ -47,7 +50,7 @@ export async function getLiveCalendarEventsAction(options: { force?: boolean } =
             id: event.uid || Math.random().toString(36),
             summary: event.summary,
             start: start.toISOString(),
-            end: new Date(event.end).toISOString(),
+            end: end.toISOString(),
             description: cleanedDescription,
             location: event.location || '',
             dayOfWeek: format(start, 'EEEE'),

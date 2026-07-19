@@ -1,6 +1,5 @@
 'use server';
 
-import { isSameDay } from 'date-fns';
 import { getHallmasterEvents } from '@/lib/hallmaster-ical';
 
 export type ClashingEvent = {
@@ -58,8 +57,6 @@ export async function checkAvailabilityAction(
 
       const eventStart = new Date(event.start);
       const eventEnd   = new Date(event.end);
-
-      if (!isSameDay(eventStart, requestedStart)) return;
 
       const entry: ClashingEvent = {
         summary: event.summary || 'Existing booking',

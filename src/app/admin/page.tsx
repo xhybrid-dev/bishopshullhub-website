@@ -21,7 +21,7 @@ import { getLiveCalendarEventsAction, type LiveEvent } from '@/app/actions/get-c
 import type { ClashingEvent } from '@/app/actions/check-availability';
 import { EnquiryCalendarView } from '@/components/admin/EnquiryCalendarView';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { format, startOfToday, parseISO, isSameDay, subDays } from 'date-fns';
+import { format, startOfToday, parseISO, subDays } from 'date-fns';
 
 const STATUS_COLUMNS = [
   { id: 'Pending', label: 'Enquiry Received', color: 'bg-amber-500', icon: Clock3 },
@@ -236,7 +236,6 @@ export default function AdminPortal() {
       liveEvents.forEach(ev => {
         const evStart = parseISO(ev.start);
         const evEnd = parseISO(ev.end);
-        if (!isSameDay(evStart, reqStart)) return;
         if (reqStart < evEnd && reqEnd > evStart) {
           clashes.push({ summary: ev.summary, start: ev.start, end: ev.end });
         }
