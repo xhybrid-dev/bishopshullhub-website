@@ -9,6 +9,7 @@ import { Clock, Calendar, Loader2, Zap, CalendarDays, MapPin, ChevronLeft, Chevr
 import { getLiveCalendarEventsAction, LiveEvent } from '@/app/actions/get-calendar';
 import { format, isToday, parseISO, startOfWeek, addDays, eachDayOfInterval, isSameDay, addWeeks, subWeeks } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { eventOverlapsDay, isMultiDayEvent } from '@/lib/event-days';
 
 export default function WhatsOnPage() {
   const [referenceDate, setReferenceDate] = useState(new Date());
@@ -34,9 +35,12 @@ export default function WhatsOnPage() {
     fetchLive();
   }, []);
 
-  // Filter events for the selected day
+  // Filter events for the selected day, including multi-day events that
+  // started earlier but are still running on it.
   const dailyLiveEvents = useMemo(() => {
-    return liveEvents.filter(event => isSameDay(parseISO(event.start), selectedDate));
+    return liveEvents.filter(event =>
+      eventOverlapsDay(parseISO(event.start), parseISO(event.end), selectedDate)
+    );
   }, [liveEvents, selectedDate]);
 
   const handlePrevWeek = () => {
@@ -146,7 +150,11 @@ export default function WhatsOnPage() {
           </div>
         ) : dailyLiveEvents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {dailyLiveEvents.map((event) => (
+            {dailyLiveEvents.map((event) => {
+              const eventStart = parseISO(event.start);
+              const eventEnd = parseISO(event.end);
+              const timeFormat = isMultiDayEvent(eventStart, eventEnd) ? 'EEE HH:mm' : 'HH:mm';
+              return (
               <Card key={event.id} className="border-none shadow-lg bg-white overflow-hidden group hover:shadow-xl transition-all duration-300 rounded-[2rem] flex flex-col">
                 <div className="p-8 space-y-4 flex-1">
                   <div className="flex justify-between items-start">
@@ -155,7 +163,7 @@ export default function WhatsOnPage() {
                     </Badge>
                     <div className="flex items-center gap-1.5 text-primary font-bold text-sm bg-primary/5 px-3 py-1 rounded-full">
                       <Clock className="h-3.5 w-3.5" />
-                      {format(parseISO(event.start), 'HH:mm')} - {format(parseISO(event.end), 'HH:mm')}
+                      {format(eventStart, timeFormat)} - {format(eventEnd, timeFormat)}
                     </div>
                   </div>
                   
@@ -177,7 +185,8 @@ export default function WhatsOnPage() {
                   )}
                 </div>
               </Card>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="py-20 text-center space-y-6 bg-muted/20 rounded-[3rem] border-2 border-dashed max-w-4xl mx-auto">

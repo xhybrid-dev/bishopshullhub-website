@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { eachEventDay, isMultiDayEvent } from '@/lib/event-days';
 import type { LiveEvent } from '@/app/actions/get-calendar';
 import type { ClashingEvent } from '@/app/actions/check-availability';
 
@@ -83,10 +84,13 @@ export function EnquiryCalendarView({
   const liveByDay = useMemo(() => {
     const map = new Map<string, LiveEvent[]>();
     liveEvents.forEach(ev => {
-      const key = format(parseISO(ev.start), 'yyyy-MM-dd');
-      const existing = map.get(key) ?? [];
-      existing.push(ev);
-      map.set(key, existing);
+      // Multi-day events appear on every day they cover.
+      eachEventDay(parseISO(ev.start), parseISO(ev.end)).forEach(day => {
+        const key = format(day, 'yyyy-MM-dd');
+        const existing = map.get(key) ?? [];
+        existing.push(ev);
+        map.set(key, existing);
+      });
     });
     return map;
   }, [liveEvents]);
@@ -212,7 +216,7 @@ export function EnquiryCalendarView({
                   );
                 })}
                 {dayLive.slice(0, Math.max(0, 3 - dayEnquiries.length)).map(ev => (
-                  <LiveEventPill key={ev.id} event={ev} />
+                  <LiveEventPill key={ev.id} event={ev} day={day} />
                 ))}
                 {(dayEnquiries.length + dayLive.length) > 3 && (
                   <span className="text-[10px] text-muted-foreground font-semibold px-1">
@@ -268,7 +272,13 @@ export function EnquiryCalendarView({
   );
 }
 
-function LiveEventPill({ event }: { event: LiveEvent }) {
+function LiveEventPill({ event, day }: { event: LiveEvent; day?: Date }) {
+  const start = parseISO(event.start);
+  const end = parseISO(event.end);
+  const multiDay = isMultiDayEvent(start, end);
+  const timeFormat = multiDay ? 'EEE HH:mm' : 'HH:mm';
+  // On continuation days of a multi-day event, the start time would mislead.
+  const pillTime = day && !isSameDay(start, day) ? 'cont.' : format(start, 'HH:mm');
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -277,7 +287,7 @@ function LiveEventPill({ event }: { event: LiveEvent }) {
           className="block text-[10px] leading-tight px-1.5 py-1 rounded-md bg-slate-200 text-slate-800 truncate cursor-pointer hover:bg-slate-300 transition-colors"
           title={event.summary}
         >
-          {format(parseISO(event.start), 'HH:mm')} {event.summary}
+          {pillTime} {event.summary}
         </span>
       </PopoverTrigger>
       <PopoverContent className="w-72 max-w-[calc(100vw-2rem)] text-xs" onClick={(e) => e.stopPropagation()}>
@@ -292,7 +302,7 @@ function LiveEventPill({ event }: { event: LiveEvent }) {
           <div className="flex items-center gap-2">
             <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span>
-              {format(parseISO(event.start), 'HH:mm')} – {format(parseISO(event.end), 'HH:mm')}
+              {format(start, timeFormat)} – {format(end, timeFormat)}
             </span>
           </div>
           {event.location && (
@@ -350,11 +360,16 @@ function EnquirySchedRow({
         {hasClash && (
           <div className="mt-2 text-[11px] bg-white rounded-md p-2 border border-red-200 space-y-1">
             <p className="font-bold text-red-700">Clashes with live booking{clashes.length > 1 ? 's' : ''}:</p>
-            {clashes.map((c, i) => (
-              <p key={i} className="text-red-700 break-words">
-                • {c.summary} ({format(parseISO(c.start), 'HH:mm')}–{format(parseISO(c.end), 'HH:mm')})
-              </p>
-            ))}
+            {clashes.map((c, i) => {
+              const clashStart = parseISO(c.start);
+              const clashEnd = parseISO(c.end);
+              const clashTimeFormat = isMultiDayEvent(clashStart, clashEnd) ? 'EEE HH:mm' : 'HH:mm';
+              return (
+                <p key={i} className="text-red-700 break-words">
+                  • {c.summary} ({format(clashStart, clashTimeFormat)}–{format(clashEnd, clashTimeFormat)})
+                </p>
+              );
+            })}
           </div>
         )}
       </div>
@@ -363,6 +378,9 @@ function EnquirySchedRow({
 }
 
 function LiveSchedRow({ event }: { event: LiveEvent }) {
+  const start = parseISO(event.start);
+  const end = parseISO(event.end);
+  const timeFormat = isMultiDayEvent(start, end) ? 'EEE HH:mm' : 'HH:mm';
   return (
     <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 min-w-0">
       <div className="w-1 self-stretch rounded-full shrink-0 bg-slate-400" />
@@ -374,7 +392,7 @@ function LiveSchedRow({ event }: { event: LiveEvent }) {
         <p className="text-xs text-muted-foreground flex items-center gap-x-3 gap-y-1 flex-wrap">
           <span className="flex items-center gap-1 shrink-0">
             <Clock className="h-3 w-3" />
-            {format(parseISO(event.start), 'HH:mm')}–{format(parseISO(event.end), 'HH:mm')}
+            {format(start, timeFormat)}–{format(end, timeFormat)}
           </span>
           {event.location && (
             <span className="flex items-start gap-1 min-w-0"><MapPin className="h-3 w-3 shrink-0 mt-0.5" /> <span className="break-words">{event.location}</span></span>
