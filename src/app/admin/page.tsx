@@ -22,6 +22,7 @@ import type { ClashingEvent } from '@/app/actions/check-availability';
 import { EnquiryCalendarView } from '@/components/admin/EnquiryCalendarView';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format, startOfToday, parseISO, subDays } from 'date-fns';
+import { endsByClosing, CLOSING_RULE_TEXT } from '@/lib/venue-hours';
 
 const STATUS_COLUMNS = [
   { id: 'Pending', label: 'Enquiry Received', color: 'bg-amber-500', icon: Clock3 },
@@ -1309,6 +1310,10 @@ function EditEnquiryDialog({
   const handleSubmit = async () => {
     if (values.endTime && values.startTime && values.endTime <= values.startTime) {
       toast({ variant: 'destructive', title: 'Invalid Times', description: 'End time must be after start time.' });
+      return;
+    }
+    if (values.endTime && values.dateRequired && !endsByClosing(values.dateRequired, values.endTime)) {
+      toast({ variant: 'destructive', title: 'Past Closing Time', description: CLOSING_RULE_TEXT });
       return;
     }
     setSaving(true);
