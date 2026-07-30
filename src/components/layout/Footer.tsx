@@ -15,7 +15,7 @@ export default function Footer() {
               The heart of our village community. A purpose-built hub for events, activities, and local connection.
             </p>
             <span className="inline-block text-xs text-background/40 bg-background/10 px-3 py-1 rounded-full">
-              Registered Charity · England &amp; Wales
+              Registered Charity No. 1176851 · England &amp; Wales
             </span>
           </div>
 
