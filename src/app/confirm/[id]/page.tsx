@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useFirebase, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, setDoc } from 'firebase/firestore';
+import { paymentDocRef, withoutPaymentFields } from '@/lib/payment-details';
 import { Loader2, CheckCircle2, Calendar, Clock, AlertTriangle, FileSignature, Eraser, Lock, Phone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -166,14 +167,22 @@ export default function HireConfirmationPage({ params }: { params: Promise<{ id:
         accountName: accountName.trim(),
       };
 
+      // Bank details and the signature go to the admin-only subcollection
+      // first: the enquiry doc is publicly readable by id, and flipping it to
+      // 'Submitted' is what closes this write window.
+      await setDoc(paymentDocRef(firestore, id), {
+        bankName: confirmation.bankName,
+        accountNumber: confirmation.accountNumber,
+        sortCode: confirmation.sortCode,
+        accountName: confirmation.accountName,
+        signatureDataUrl,
+        savedAt: confirmedAt,
+      });
+
       await updateDoc(enquiryRef, {
         confirmationStatus: 'Submitted',
         confirmationSubmittedAt: confirmedAt,
-        confirmation: {
-          ...confirmation,
-          // Signature image kept in Firestore for the admin record.
-          signatureDataUrl,
-        },
+        confirmation: withoutPaymentFields(confirmation),
       });
 
       const result = await submitHireConfirmationAction({

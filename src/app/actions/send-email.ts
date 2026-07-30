@@ -11,6 +11,7 @@ import {
 } from '@/ai/flows/format-hire-confirmation-email-flow';
 import { Resend } from 'resend';
 import { formatUKDate } from '@/lib/utils';
+import type { PaymentDetails } from '@/lib/payment-details';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 // Booking process inbox — new enquiries, bookings admin, security review CC.
@@ -444,14 +445,20 @@ export async function submitHireConfirmationAction(input: {
  */
 export async function sendDepositReturnEmailAction(input: {
   enquiryData: any;
+  /**
+   * Read by the admin client from the enquiry's admin-only `private/payment`
+   * doc — it is deliberately absent from `enquiryData`, which is publicly
+   * readable by id.
+   */
+  payment: PaymentDetails | null;
   amount: number;
   fullDeposit: number;
   isFullReturn: boolean;
   reason?: string;
 }) {
   try {
-    const { enquiryData, amount, fullDeposit, isFullReturn, reason } = input;
-    const confirmation = enquiryData.confirmation || {};
+    const { enquiryData, payment, amount, fullDeposit, isFullReturn, reason } = input;
+    const confirmation: Partial<PaymentDetails> = payment ?? {};
     const deduction = Math.max(0, fullDeposit - amount);
     const hireDate = formatUKDate(enquiryData.dateRequired);
 

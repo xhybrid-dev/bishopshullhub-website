@@ -7,12 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, LayoutDashboard, LogOut, Inbox, Mail, Calendar, CalendarDays, ShieldAlert, FileText, CheckCircle2, MoreVertical, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, Trash2, Send, AlertTriangle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle, RefreshCw, MessageSquare } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, useDoc, setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { doc, collection, query, orderBy, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, collection, query, orderBy, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { signOut } from 'firebase/auth';
 import Link from 'next/link';
 import { cn, formatUKDate, formatUKDateTime } from '@/lib/utils';
 import { ukDateTimeToInstant } from '@/lib/uk-time';
+import { paymentDocRef, readLegacyPaymentDetails, type PaymentDetails } from '@/lib/payment-details';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -319,11 +320,18 @@ export default function AdminPortal() {
     }
   };
 
-  const handleSendDepositReturn = async (enquiry: any, amount: number, isFullReturn: boolean, reason?: string) => {
+  const handleSendDepositReturn = async (
+    enquiry: any,
+    amount: number,
+    isFullReturn: boolean,
+    reason: string | undefined,
+    payment: PaymentDetails | null
+  ) => {
     try {
       const fullDeposit = getDepositAmount(enquiry);
       const result = await sendDepositReturnEmailAction({
         enquiryData: enquiry,
+        payment,
         amount,
         fullDeposit,
         isFullReturn,
@@ -1065,19 +1073,54 @@ function DepositRow({
   onSend,
 }: {
   enquiry: any;
-  onSend: (enquiry: any, amount: number, isFullReturn: boolean, reason?: string) => Promise<boolean>;
+  onSend: (
+    enquiry: any,
+    amount: number,
+    isFullReturn: boolean,
+    reason: string | undefined,
+    payment: PaymentDetails | null
+  ) => Promise<boolean>;
 }) {
   const [sendingFull, setSendingFull] = useState(false);
   const [deductionOpen, setDeductionOpen] = useState(false);
-  const confirmation = enquiry.confirmation || {};
+  const { firestore } = useFirebase();
+  const [payment, setPayment] = useState<PaymentDetails | null>(null);
+  const [paymentState, setPaymentState] = useState<'loading' | 'ready' | 'missing'>('loading');
   const fullDeposit = getDepositAmount(enquiry);
+
+  // Bank details are admin-only and live outside the enquiry, so they are
+  // fetched per row — they only reach the browser on the Deposits tab.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDoc(paymentDocRef(firestore, enquiry.id));
+        if (cancelled) return;
+        if (snap.exists()) {
+          setPayment(snap.data() as PaymentDetails);
+          setPaymentState('ready');
+          return;
+        }
+        // Enquiries confirmed before the split still carry them inline.
+        const legacy = readLegacyPaymentDetails(enquiry);
+        setPayment(legacy);
+        setPaymentState(legacy ? 'ready' : 'missing');
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Could not load payment details:', err);
+        setPayment(null);
+        setPaymentState('missing');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [firestore, enquiry]);
   const previousReturn = enquiry.depositReturn as
     | { amount: number; fullDeposit?: number; isFullReturn: boolean; sentAt: string; reason?: string | null }
     | undefined;
 
   const handleFullReturn = async () => {
     setSendingFull(true);
-    await onSend(enquiry, fullDeposit, true);
+    await onSend(enquiry, fullDeposit, true, undefined, payment);
     setSendingFull(false);
   };
 
@@ -1098,24 +1141,35 @@ function DepositRow({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-muted/30 rounded-xl p-3 text-xs">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Account Name</p>
-            <p className="font-semibold">{confirmation.accountName || '—'}</p>
+        {paymentState === 'loading' ? (
+          <div className="flex items-center gap-2 bg-muted/30 rounded-xl p-3 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading bank details…
           </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Bank</p>
-            <p className="font-semibold">{confirmation.bankName || '—'}</p>
+        ) : paymentState === 'missing' ? (
+          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-xs">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <p>No bank details on file for this booking. Contact the hirer for them before authorising a refund.</p>
           </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Account Number</p>
-            <p className="font-mono">{confirmation.accountNumber || '—'}</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-muted/30 rounded-xl p-3 text-xs">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Account Name</p>
+              <p className="font-semibold">{payment?.accountName || '—'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Bank</p>
+              <p className="font-semibold">{payment?.bankName || '—'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Account Number</p>
+              <p className="font-mono">{payment?.accountNumber || '—'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Sort Code</p>
+              <p className="font-mono">{formatSortCodeDisplay(payment?.sortCode)}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Sort Code</p>
-            <p className="font-mono">{formatSortCodeDisplay(confirmation.sortCode)}</p>
-          </div>
-        </div>
+        )}
 
         {previousReturn && (
           <div className="flex items-start gap-2 text-xs bg-green-50 border border-green-200 text-green-800 rounded-lg p-2.5">
@@ -1136,7 +1190,7 @@ function DepositRow({
           <Button
             className="flex-1 gap-2"
             onClick={handleFullReturn}
-            disabled={sendingFull}
+            disabled={sendingFull || paymentState !== 'ready'}
           >
             {sendingFull ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
             Full Deposit Return
@@ -1145,6 +1199,7 @@ function DepositRow({
             variant="outline"
             className="flex-1 gap-2"
             onClick={() => setDeductionOpen(true)}
+            disabled={paymentState !== 'ready'}
           >
             <MinusCircle className="h-4 w-4" />
             Deduction
@@ -1158,7 +1213,7 @@ function DepositRow({
         fullDeposit={fullDeposit}
         hirerName={enquiry.name}
         onSubmit={async (amount, reason) => {
-          const ok = await onSend(enquiry, amount, false, reason);
+          const ok = await onSend(enquiry, amount, false, reason, payment);
           if (ok) setDeductionOpen(false);
         }}
       />
