@@ -2,6 +2,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { checkAvailabilityAction } from '@/app/actions/check-availability';
 import { ukDateToInstant, ukStartOfToday } from '@/lib/uk-time';
+import { endsByClosing, CLOSING_RULE_TEXT } from '@/lib/venue-hours';
 
 const checkAvailabilityTool = ai.defineTool(
   {
@@ -20,7 +21,7 @@ const checkAvailabilityTool = ai.defineTool(
         .describe('End time of the requested hire in HH:mm format, e.g. "14:00"'),
     }),
     outputSchema: z.object({
-      status: z.enum(['available', 'buffer-warning', 'clash', 'error']),
+      status: z.enum(['available', 'buffer-warning', 'clash', 'after-hours', 'error']),
       clashes: z
         .array(
           z.object({
@@ -52,6 +53,8 @@ const checkAvailabilityTool = ai.defineTool(
           return { status: 'clash' as const, clashes: result.clashes };
         case 'buffer-warning':
           return { status: 'buffer-warning' as const, adjacent: result.adjacent };
+        case 'after-hours':
+          return { status: 'after-hours' as const, message: result.message };
         case 'error':
           return { status: 'error' as const, message: result.message };
         case 'available':
@@ -182,6 +185,11 @@ const prepareHireEnquiryTool = ai.defineTool(
         errors.push('End time must be after start time.');
       }
 
+      // Closing-time policy
+      if (!endsByClosing(fields.dateRequired, fields.endTime)) {
+        errors.push(`The requested end time is past the venue's closing time. ${CLOSING_RULE_TEXT} Please ask for an earlier end time.`);
+      }
+
       if (errors.length > 0) {
         return { status: 'validation_error', errors };
       }
@@ -212,6 +220,10 @@ const prepareHireEnquiryTool = ai.defineTool(
           message:
             'This slot now conflicts with an existing booking. Do NOT submit. Tell the user to check the live schedule at /hire#booking-form and choose another slot.',
         };
+      }
+
+      if (availability.status === 'after-hours') {
+        return { status: 'validation_error', errors: [availability.message] };
       }
 
       if (availability.status === 'error') {

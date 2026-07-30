@@ -2,6 +2,7 @@
 
 import { getHallmasterEvents } from '@/lib/hallmaster-ical';
 import { ukDateTimeToInstant } from '@/lib/uk-time';
+import { endsByClosing, closingLabelForDate, CLOSING_RULE_TEXT } from '@/lib/venue-hours';
 
 export type ClashingEvent = {
   summary: string;
@@ -13,6 +14,7 @@ export type AvailabilityResult =
   | { status: 'available' }
   | { status: 'buffer-warning'; adjacent: ClashingEvent[] }
   | { status: 'clash'; clashes: ClashingEvent[] }
+  | { status: 'after-hours'; message: string }
   | { status: 'error'; message: string };
 
 const BUFFER_MINUTES = 15;
@@ -54,6 +56,19 @@ export async function checkAvailabilityAction(
     if (isNaN(requestedStart.getTime()) || isNaN(requestedEnd.getTime())) {
       return { status: 'error', message: 'That date or time could not be read. Please re-enter them and try again.' };
     }
+    // Closing-time policy: reject requests ending after the venue's closing
+    // time for that day before touching the live calendar.
+    if (!endsByClosing(date, endTime)) {
+      const day = new Date(`${date}T00:00:00`);
+      const weekday = day.toLocaleDateString('en-GB', { weekday: 'long' });
+      return {
+        status: 'after-hours',
+        message: `Bookings on a ${weekday} must end by ${closingLabelForDate(day)}. ${CLOSING_RULE_TEXT}`,
+      };
+    }
+
+    const requestedStart = new Date(`${date}T${startTime}:00`);
+    const requestedEnd   = new Date(`${date}T${endTime}:00`);
 
     const events = await getHallmasterEvents();
 

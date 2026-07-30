@@ -22,6 +22,7 @@ import { useFirebase, setDocumentNonBlocking, initiateAnonymousSignIn } from '@/
 import { doc } from 'firebase/firestore';
 import { sendEnquiryEmailAction } from '@/app/actions/send-email';
 import { checkAvailabilityAction, prefetchAvailabilityCache, type AvailabilityResult } from '@/app/actions/check-availability';
+import { closingMinutesForDate, closingLabelForDate, timeToMinutes, endsByClosing } from '@/lib/venue-hours';
 
 const formSchema = z.object({
   acknowledgedPolicies: z.boolean().refine(v => v === true, "Please acknowledge the policies to continue"),
@@ -55,6 +56,12 @@ const formSchema = z.object({
   return data.endTime > data.startTime;
 }, {
   message: "End time must be after start time",
+  path: ["endTime"],
+}).refine((data) => {
+  if (!data.date || !data.endTime) return true;
+  return endsByClosing(data.date, data.endTime);
+}, {
+  message: "Bookings must end by 11pm Monday to Thursday, and by midnight Friday to Sunday",
   path: ["endTime"],
 });
 
@@ -148,9 +155,22 @@ export default function HirePage() {
     return options;
   })();
 
-  // End-time options must be strictly after the chosen start time
+  // Closing time for the chosen date: 23:00 Mon-Thu, midnight Fri-Sun.
+  // Until a date is picked, offer the full range and let validation catch it.
+  const dateValue = form.watch("date");
+  const selectedDay = dateValue ? new Date(`${dateValue}T00:00:00`) : null;
+  const closingMinutes = selectedDay && !isNaN(selectedDay.getTime())
+    ? closingMinutesForDate(selectedDay)
+    : 24 * 60;
+  const closingLabel = selectedDay && !isNaN(selectedDay.getTime())
+    ? closingLabelForDate(selectedDay)
+    : null;
+
+  // Starts must leave room before closing; ends must be after the start and
+  // no later than closing.
+  const startTimeOptions = quarterHourOptions.filter((t) => timeToMinutes(t) < closingMinutes);
   const endTimeOptions = startTime
-    ? quarterHourOptions.filter((t) => t > startTime)
+    ? quarterHourOptions.filter((t) => t > startTime && timeToMinutes(t) <= closingMinutes)
     : [];
 
   // Warm the iCal cache as soon as the page loads so it's ready when the user reaches step 4
@@ -165,8 +185,19 @@ export default function HirePage() {
     }
   }, [startTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Clear any selected times that fall outside the chosen day's closing time
+  // (e.g. the user picked 23:30 then switched to a Monday, which closes at 23:00)
+  useEffect(() => {
+    if (startTime && timeToMinutes(startTime) >= closingMinutes) {
+      form.setValue('startTime', '', { shouldValidate: false });
+      form.setValue('endTime', '', { shouldValidate: false });
+    } else if (endTime && timeToMinutes(endTime) > closingMinutes) {
+      form.setValue('endTime', '', { shouldValidate: false });
+    }
+  }, [closingMinutes]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Check availability against the live iCal feed whenever date + both times are set
-  const date = form.watch("date");
+  const date = dateValue;
   useEffect(() => {
     if (!date || !startTime || !endTime || endTime <= startTime) {
       setAvailabilityResult(null);
@@ -210,6 +241,15 @@ export default function HirePage() {
       return;
     }
 
+    if (step === 4 && availabilityResult?.status === 'after-hours') {
+      toast({
+        variant: "destructive",
+        title: "Past closing time",
+        description: availabilityResult.message,
+      });
+      return;
+    }
+
     if (isValid) setStep(prev => Math.min(prev + 1, totalSteps));
   };
 
@@ -221,6 +261,16 @@ export default function HirePage() {
         variant: "destructive",
         title: "Time slot unavailable",
         description: "Your requested time clashes with an existing booking. Please choose a different time, or contact booking@bishopshullhub.co.uk.",
+      });
+      setStep(4);
+      return;
+    }
+
+    if (availabilityResult?.status === 'after-hours') {
+      toast({
+        variant: "destructive",
+        title: "Past closing time",
+        description: availabilityResult.message,
       });
       setStep(4);
       return;
@@ -704,7 +754,7 @@ ${submittedData.additionalRequirements}
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {quarterHourOptions.map((t) => (
+                                {startTimeOptions.map((t) => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -739,6 +789,11 @@ ${submittedData.additionalRequirements}
                             </Select>
                             {!startTime && (
                               <p className="text-xs text-muted-foreground">Select a start time first</p>
+                            )}
+                            {closingLabel && (
+                              <p className="text-xs text-muted-foreground">
+                                Bookings on this day must end by <strong>{closingLabel}</strong>.
+                              </p>
                             )}
                             <FormMessage />
                           </FormItem>
@@ -831,6 +886,16 @@ ${submittedData.additionalRequirements}
                           </div>
                         )}
 
+                        {!isCheckingAvailability && availabilityResult?.status === 'after-hours' && (
+                          <div className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-1">
+                            <div className="flex items-center gap-2 text-red-800 text-xs font-bold">
+                              <AlertTriangle className="h-4 w-4 shrink-0" />
+                              This booking ends after the venue's closing time.
+                            </div>
+                            <p className="text-xs text-red-700 pl-6">{availabilityResult.message}</p>
+                          </div>
+                        )}
+
                         {!isCheckingAvailability && availabilityResult?.status === 'error' && (
                           <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
                             <Info className="h-4 w-4 shrink-0" />
@@ -895,7 +960,7 @@ ${submittedData.additionalRequirements}
                         {step === 1 ? "Start" : "Next"} <ArrowRight className="ml-1 h-4 w-4" />
                       </Button>
                     ) : (
-                      <Button type="submit" className="bg-primary hover:bg-primary/90 px-8" disabled={isSubmitting || availabilityResult?.status === 'clash'}>
+                      <Button type="submit" className="bg-primary hover:bg-primary/90 px-8" disabled={isSubmitting || availabilityResult?.status === 'clash' || availabilityResult?.status === 'after-hours'}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Submit Enquiry
                       </Button>
