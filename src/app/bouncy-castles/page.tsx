@@ -156,6 +156,7 @@ export default function BouncyCastlesPage() {
             src={exampleImage?.imageUrl || "https://bhhub.co.uk/wp-content/uploads/2022/07/Bouncy-Castle-Example2-1024x768.jpg"}
             alt={exampleImage?.description || "Bouncy Castle Example"}
             fill
+            sizes="(max-width: 768px) 100vw, 720px"
             className="object-cover"
             data-ai-hint="bouncy castle hall"
           />

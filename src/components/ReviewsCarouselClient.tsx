@@ -83,6 +83,7 @@ export default function ReviewsCarouselClient({ reviews, averageRating, totalRat
                           src={review.authorPhoto}
                           alt={review.authorName}
                           fill
+                          sizes="36px"
                           className="object-cover"
                           unoptimized
                         />

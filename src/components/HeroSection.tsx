@@ -66,7 +66,10 @@ export default function HeroSection({ heroImageUrl }: HeroSectionProps) {
             playsInline
             autoPlay
             loop
-            preload="auto"
+            // "auto" tells the browser to pull all 4 MB up front, competing with
+            // the render-critical assets. "metadata" lets it stream as it plays;
+            // the poster covers the frame in the meantime either way.
+            preload="metadata"
             disablePictureInPicture
             disableRemotePlayback
             onError={() => setVideoFailed(true)}

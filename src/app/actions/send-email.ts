@@ -23,6 +23,9 @@ const TRUSTEES_EMAIL = 'trustees@bishopshullhub.co.uk';
 function buildFallbackAdminEmail(enquiryData: any) {
   const displayDate = formatUKDate(enquiryData.dateRequired) || 'TBC';
   const subject = `New Booking Enquiry: ${enquiryData.typeOfEvent || 'Event'} on ${displayDate}`;
+  // Every value below comes straight from the public enquiry form, so it has to
+  // be escaped before it goes anywhere near the HTML body.
+  const h = (v: unknown) => escapeHtml(v == null ? '' : String(v));
   const textBody = `NEW BOOKING ENQUIRY
 -------------------
 Enquiry ID: ${enquiryData.id}
@@ -46,27 +49,85 @@ ${enquiryData.additionalRequirements}`;
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
       <div style="background-color: #1a4d46; color: #fff; padding: 24px; text-align: center;">
         <h1 style="margin: 0; font-size: 22px;">New Booking Enquiry</h1>
-        <p style="margin: 4px 0 0; opacity: 0.85; font-size: 13px;">Enquiry ID: ${enquiryData.id}</p>
+        <p style="margin: 4px 0 0; opacity: 0.85; font-size: 13px;">Enquiry ID: ${h(enquiryData.id)}</p>
       </div>
       <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
         <h2 style="margin-top: 0; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Event</h2>
-        <p style="margin:4px 0;"><strong>Type:</strong> ${enquiryData.typeOfEvent}</p>
-        <p style="margin:4px 0;"><strong>Date:</strong> ${displayDate}</p>
-        <p style="margin:4px 0;"><strong>Times:</strong> ${enquiryData.startTime} – ${enquiryData.endTime}</p>
-        <p style="margin:4px 0;"><strong>Attendance:</strong> ${enquiryData.estimatedAttendance}</p>
+        <p style="margin:4px 0;"><strong>Type:</strong> ${h(enquiryData.typeOfEvent)}</p>
+        <p style="margin:4px 0;"><strong>Date:</strong> ${h(displayDate)}</p>
+        <p style="margin:4px 0;"><strong>Times:</strong> ${h(enquiryData.startTime)} – ${h(enquiryData.endTime)}</p>
+        <p style="margin:4px 0;"><strong>Attendance:</strong> ${h(enquiryData.estimatedAttendance)}</p>
 
         <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Hirer</h2>
-        <p style="margin:4px 0;"><strong>Name:</strong> ${enquiryData.name}</p>
-        <p style="margin:4px 0;"><strong>Email:</strong> ${enquiryData.emailAddress}</p>
-        <p style="margin:4px 0;"><strong>Phone:</strong> ${enquiryData.phoneNumber}</p>
-        <p style="margin:4px 0;"><strong>Address:</strong> ${enquiryData.postalAddress}, ${enquiryData.postcode}</p>
-        <p style="margin:4px 0;"><strong>Hired before:</strong> ${enquiryData.hiredBefore || 'Not specified'}</p>
+        <p style="margin:4px 0;"><strong>Name:</strong> ${h(enquiryData.name)}</p>
+        <p style="margin:4px 0;"><strong>Email:</strong> ${h(enquiryData.emailAddress)}</p>
+        <p style="margin:4px 0;"><strong>Phone:</strong> ${h(enquiryData.phoneNumber)}</p>
+        <p style="margin:4px 0;"><strong>Address:</strong> ${h(enquiryData.postalAddress)}, ${h(enquiryData.postcode)}</p>
+        <p style="margin:4px 0;"><strong>Hired before:</strong> ${h(enquiryData.hiredBefore || 'Not specified')}</p>
 
         <h2 style="margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Requirements</h2>
-        <p style="margin:4px 0; white-space: pre-wrap;">${enquiryData.additionalRequirements}</p>
+        <p style="margin:4px 0; white-space: pre-wrap;">${h(enquiryData.additionalRequirements)}</p>
 
         <p style="font-size: 12px; color: #64748b; margin-top: 28px; text-align: center;">
           Bishops Hull Hub Automated Booking System
+        </p>
+      </div>
+    </div>`;
+
+  return { subject, htmlBody, textBody };
+}
+
+function buildFallbackCustomerEmail(enquiryData: any, faqUrl: string) {
+  const displayDate = formatUKDate(enquiryData.dateRequired) || 'TBC';
+  const h = (v: unknown) => escapeHtml(v == null ? '' : String(v));
+  const subject = `We've received your enquiry — Bishops Hull Hub (${enquiryData.id})`;
+
+  const textBody = `Hello ${enquiryData.name},
+
+Thank you for your booking enquiry for Bishops Hull Hub. We have received it and our volunteer bookings secretary will be in touch, usually within 3 working days.
+
+Your enquiry
+------------
+Reference:  ${enquiryData.id}
+Event:      ${enquiryData.typeOfEvent}
+Date:       ${displayDate}
+Times:      ${enquiryData.startTime} – ${enquiryData.endTime}
+Attendance: ${enquiryData.estimatedAttendance}
+
+Please note this is an enquiry, not a confirmed booking. Your date is not held until the bookings secretary confirms it.
+
+Frequently asked questions: ${faqUrl}
+Any questions? Just reply to this email or contact ${ADMIN_EMAIL}.
+
+Bishops Hull Hub`;
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+      <div style="background-color: #1a4d46; color: #fff; padding: 24px; text-align: center;">
+        <h1 style="margin: 0; font-size: 22px;">Enquiry Received</h1>
+        <p style="margin: 4px 0 0; opacity: 0.85; font-size: 13px;">Reference: ${h(enquiryData.id)}</p>
+      </div>
+      <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
+        <p style="margin-top: 0;">Hello ${h(enquiryData.name)},</p>
+        <p>Thank you for your booking enquiry for Bishops Hull Hub. Our volunteer bookings secretary will be in touch, usually within 3 working days.</p>
+
+        <h2 style="font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">Your enquiry</h2>
+        <p style="margin:4px 0;"><strong>Event:</strong> ${h(enquiryData.typeOfEvent)}</p>
+        <p style="margin:4px 0;"><strong>Date:</strong> ${h(displayDate)}</p>
+        <p style="margin:4px 0;"><strong>Times:</strong> ${h(enquiryData.startTime)} – ${h(enquiryData.endTime)}</p>
+        <p style="margin:4px 0;"><strong>Attendance:</strong> ${h(enquiryData.estimatedAttendance)}</p>
+
+        <p style="background-color:#fefce8; border:1px solid #fde68a; border-radius:8px; padding:12px; margin-top:20px; font-size:14px;">
+          This is an enquiry, not a confirmed booking — your date is not held until the bookings secretary confirms it.
+        </p>
+
+        <p style="margin-top:20px;">
+          You may find our <a href="${h(faqUrl)}" style="color:#1a4d46;">frequently asked questions</a> useful in the meantime.
+          Any questions? Just reply to this email.
+        </p>
+
+        <p style="font-size: 12px; color: #64748b; margin-top: 28px; text-align: center;">
+          Bishops Hull Hub
         </p>
       </div>
     </div>`;
@@ -83,50 +144,75 @@ export async function sendEnquiryEmailAction(enquiryData: any) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const faqUrl = `${baseUrl}/faq`;
 
-    // 1. Format Admin Notification — fall back to a static template if AI is unavailable
-    let adminEmail;
-    try {
-      adminEmail = await formatEnquiryEmail({ enquiryData });
-    } catch (aiError: any) {
-      console.error('AI formatting failed for admin enquiry email, using fallback:', aiError);
-      adminEmail = buildFallbackAdminEmail(enquiryData);
-    }
-
-    // 2. Format and send Customer Confirmation
-    const customerEmail = await formatCustomerConfirmationEmail({ enquiryData, faqUrl });
+    // Format both bodies up front. Neither AI call may sink the other — the
+    // admin notification is the one that must not be lost, since it is how the
+    // bookings secretary learns the enquiry exists at all.
+    const [adminEmail, customerEmail] = await Promise.all([
+      formatEnquiryEmail({ enquiryData }).catch((aiError: any) => {
+        console.error('AI formatting failed for admin enquiry email, using fallback:', aiError);
+        return buildFallbackAdminEmail(enquiryData);
+      }),
+      formatCustomerConfirmationEmail({ enquiryData, faqUrl }).catch((aiError: any) => {
+        console.error('AI formatting failed for customer confirmation email, using fallback:', aiError);
+        return buildFallbackCustomerEmail(enquiryData, faqUrl);
+      }),
+    ]);
 
     if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== 're_your_api_key_here') {
-      // Send to Admin
-      await resend.emails.send({
-        from: 'Hub Bookings <bookings@bishopshullhub.co.uk>',
-        to: ADMIN_EMAIL,
-        subject: adminEmail.subject,
-        html: adminEmail.htmlBody,
-        text: adminEmail.textBody,
-      });
+      const [adminResult, customerResult] = await Promise.allSettled([
+        resend.emails.send({
+          from: 'Hub Bookings <bookings@bishopshullhub.co.uk>',
+          to: ADMIN_EMAIL,
+          subject: adminEmail.subject,
+          html: adminEmail.htmlBody,
+          text: adminEmail.textBody,
+        }),
+        resend.emails.send({
+          from: 'Bishops Hull Hub <noreply@bishopshullhub.co.uk>',
+          to: enquiryData.emailAddress,
+          subject: customerEmail.subject,
+          html: customerEmail.htmlBody,
+          text: customerEmail.textBody,
+          replyTo: ADMIN_EMAIL,
+        }),
+      ]);
 
-      // Send to Customer
-      await resend.emails.send({
-        from: 'Bishops Hull Hub <noreply@bishopshullhub.co.uk>',
-        to: enquiryData.emailAddress,
-        subject: customerEmail.subject,
-        html: customerEmail.htmlBody,
-        text: customerEmail.textBody,
-        replyTo: ADMIN_EMAIL,
-      });
-    } else {
-      console.log('--- EMAIL SIMULATION ---');
-      console.log('To Admin:', ADMIN_EMAIL);
-      console.log('Subject:', adminEmail.subject);
-      console.log('---');
-      console.log('To Customer:', enquiryData.emailAddress);
-      console.log('Subject:', customerEmail.subject);
+      // Resend reports delivery problems in the resolved value, not by throwing.
+      const failure = (r: PromiseSettledResult<{ error?: { message?: string } | null }>) =>
+        r.status === 'rejected'
+          ? r.reason?.message || 'send failed'
+          : r.value?.error?.message || null;
+
+      const adminError = failure(adminResult);
+      const customerError = failure(customerResult);
+
+      if (adminError) console.error('Failed to send admin enquiry email:', adminError);
+      if (customerError) console.error('Failed to send customer confirmation email:', customerError);
+
+      return {
+        success: !adminError,
+        adminEmailSent: !adminError,
+        customerEmailSent: !customerError,
+        ...(adminError ? { error: adminError } : {}),
+      };
     }
-    
-    return { success: true };
+
+    console.log('--- EMAIL SIMULATION ---');
+    console.log('To Admin:', ADMIN_EMAIL);
+    console.log('Subject:', adminEmail.subject);
+    console.log('---');
+    console.log('To Customer:', enquiryData.emailAddress);
+    console.log('Subject:', customerEmail.subject);
+
+    return { success: true, adminEmailSent: true, customerEmailSent: true };
   } catch (error: any) {
     console.error('Failed to send emails:', error);
-    return { success: false, error: error.message || 'Failed to process emails' };
+    return {
+      success: false,
+      adminEmailSent: false,
+      customerEmailSent: false,
+      error: error.message || 'Failed to process emails',
+    };
   }
 }
 
@@ -148,6 +234,8 @@ export async function sendSecurityReviewEmailAction(enquiryData: any, securityCo
     } catch (aiError: any) {
       console.error('AI Formatting failed, using fallback:', aiError);
       const displayDate = formatUKDate(enquiryData.dateRequired);
+      // Enquiry fields are hirer-supplied — escape before embedding in HTML.
+      const h = (v: unknown) => escapeHtml(v == null ? '' : String(v));
       formattedEmail = {
         subject: `Security Review Required: ${enquiryData.typeOfEvent} on ${displayDate}`,
         htmlBody: `
@@ -160,15 +248,15 @@ export async function sendSecurityReviewEmailAction(enquiryData: any, securityCo
               
               <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
                 <h2 style="margin-top: 0; font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">Event Details</h2>
-                <p><strong>Type:</strong> ${enquiryData.typeOfEvent}</p>
-                <p><strong>Date:</strong> ${displayDate}</p>
-                <p><strong>Times:</strong> ${enquiryData.startTime} - ${enquiryData.endTime}</p>
-                <p><strong>Attendance:</strong> ${enquiryData.estimatedAttendance} people</p>
-                
+                <p><strong>Type:</strong> ${h(enquiryData.typeOfEvent)}</p>
+                <p><strong>Date:</strong> ${h(displayDate)}</p>
+                <p><strong>Times:</strong> ${h(enquiryData.startTime)} - ${h(enquiryData.endTime)}</p>
+                <p><strong>Attendance:</strong> ${h(enquiryData.estimatedAttendance)} people</p>
+
                 <h2 style="margin-top: 20px; font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">Hirer Info</h2>
-                <p><strong>Name:</strong> ${enquiryData.name}</p>
-                <p><strong>Contact:</strong> ${enquiryData.emailAddress} / ${enquiryData.phoneNumber}</p>
-                <p><strong>Requirements:</strong> ${enquiryData.additionalRequirements || 'None specified'}</p>
+                <p><strong>Name:</strong> ${h(enquiryData.name)}</p>
+                <p><strong>Contact:</strong> ${h(enquiryData.emailAddress)} / ${h(enquiryData.phoneNumber)}</p>
+                <p><strong>Requirements:</strong> ${h(enquiryData.additionalRequirements || 'None specified')}</p>
               </div>
 
               <div style="text-align: center; margin-top: 32px;">

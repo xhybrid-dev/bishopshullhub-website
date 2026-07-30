@@ -67,6 +67,7 @@ export default function CommunityPage() {
                 src={sensoryMain?.imageUrl || "https://picsum.photos/seed/sensory-1/1200/600"} 
                 alt="Sensory Trail Entrance" 
                 fill 
+                sizes="100vw"
                 className="object-cover"
                 data-ai-hint="sensory garden entrance"
              />
@@ -107,6 +108,7 @@ export default function CommunityPage() {
               src="/Phase 1.jpg" 
               alt="Phase 1 Connection" 
               fill 
+              sizes="(max-width: 1024px) 100vw, 50vw"
               className="object-cover"
               data-ai-hint="garden path"
             />
@@ -119,6 +121,7 @@ export default function CommunityPage() {
               src="/Phase 2.jpg" 
               alt="Phase 2 Amphitheatre" 
               fill 
+              sizes="(max-width: 1024px) 100vw, 50vw"
               className="object-cover"
               data-ai-hint="outdoor seating"
             />
@@ -158,6 +161,7 @@ export default function CommunityPage() {
               src="/Phase 3.jpg" 
               alt="Phase 3 Natural Play" 
               fill 
+              sizes="(max-width: 1024px) 100vw, 50vw"
               className="object-cover"
               data-ai-hint="play area"
             />

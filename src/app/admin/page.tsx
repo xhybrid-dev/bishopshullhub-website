@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { signOut } from 'firebase/auth';
 import Link from 'next/link';
 import { cn, formatUKDate, formatUKDateTime } from '@/lib/utils';
+import { ukDateTimeToInstant } from '@/lib/uk-time';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -226,11 +227,10 @@ export default function AdminPortal() {
     if (liveEvents.length === 0) return map;
     activeEnquiries.forEach(e => {
       if (!e.dateRequired || !e.startTime || !e.endTime) return;
-      let reqStart: Date, reqEnd: Date;
-      try {
-        reqStart = new Date(`${e.dateRequired}T${e.startTime}:00`);
-        reqEnd = new Date(`${e.dateRequired}T${e.endTime}:00`);
-      } catch { return; }
+      // Resolve in Europe/London rather than the admin's local zone so the
+      // clash map matches what check-availability decides on the server.
+      const reqStart = ukDateTimeToInstant(e.dateRequired, e.startTime);
+      const reqEnd = ukDateTimeToInstant(e.dateRequired, e.endTime);
       if (isNaN(reqStart.getTime()) || isNaN(reqEnd.getTime())) return;
       const clashes: ClashingEvent[] = [];
       liveEvents.forEach(ev => {
