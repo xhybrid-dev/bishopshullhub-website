@@ -67,9 +67,6 @@ export async function checkAvailabilityAction(
       };
     }
 
-    const requestedStart = new Date(`${date}T${startTime}:00`);
-    const requestedEnd   = new Date(`${date}T${endTime}:00`);
-
     const events = await getHallmasterEvents();
 
     const clashes: ClashingEvent[] = [];

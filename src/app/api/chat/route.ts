@@ -3,6 +3,67 @@ import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { hireChatbotFlow } from '@/ai/flows/hire-chatbot-flow';
 import { getServerFirestore } from '@/lib/firestore-server';
 import { SITE_CONTACT } from '@/lib/site-contact';
+import { checkChatAllowance, getChatClientKey } from '@/lib/chat-rate-limit';
+
+/** Shown instead of a model reply once someone trips the abuse limits. */
+const BLOCKED_MESSAGE =
+  "I've had to pause this chat for a little while — it's had an unusual number of messages. " +
+  "Sorry if you were in the middle of something. Please email booking@bishopshullhub.co.uk " +
+  "and the bookings team will be happy to help, or use the enquiry form at /hire#booking-form.";
+
+/** A single message longer than this is not a question about hiring a hall. */
+const MAX_MESSAGE_CHARS = 1500;
+/** Caps how much conversation is replayed to the model on each turn. */
+const MAX_HISTORY_MESSAGES = 60;
+const MAX_HISTORY_CHARS = 20_000;
+
+type ChatHistory = Array<{ role: 'user' | 'model'; content: Array<{ text: string }> }>;
+
+/**
+ * Keeps the most recent turns within both caps. The client replays the whole
+ * conversation on every message, so without this the token cost of a long
+ * thread grows with its own length.
+ */
+function trimHistory(history: ChatHistory): ChatHistory {
+  const recent = history.slice(-MAX_HISTORY_MESSAGES);
+  let total = 0;
+  const kept: ChatHistory = [];
+  for (let i = recent.length - 1; i >= 0; i--) {
+    const size = (recent[i].content ?? []).reduce((n, part) => n + (part?.text?.length ?? 0), 0);
+    if (total + size > MAX_HISTORY_CHARS) break;
+    total += size;
+    kept.unshift(recent[i]);
+  }
+  return kept;
+}
+
+/**
+ * FAQs change rarely but were being re-read from Firestore on every single
+ * message, which is both a cost and something an abuser could amplify.
+ */
+const FAQ_CACHE_TTL_MS = 5 * 60_000;
+let faqCache: { text: string; fetchedAt: number } | null = null;
+
+async function getLiveFaqText(): Promise<string> {
+  const now = Date.now();
+  if (faqCache && now - faqCache.fetchedAt < FAQ_CACHE_TTL_MS) return faqCache.text;
+  try {
+    const firestore = getServerFirestore();
+    const snap = await getDocs(query(collection(firestore, 'faqs'), orderBy('order', 'asc')));
+    const text = snap.docs
+      .map((d) => {
+        const data = d.data() as { q?: string; a?: string };
+        return data.q && data.a ? `Q: ${data.q}\nA: ${data.a}` : null;
+      })
+      .filter(Boolean)
+      .join('\n\n');
+    faqCache = { text, fetchedAt: now };
+    return text;
+  } catch {
+    // Continue without FAQs — the static facts are sufficient.
+    return faqCache?.text ?? '';
+  }
+}
 
 const VENUE_FACTS = `
 VENUE: Bishops Hull Hub
@@ -182,33 +243,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No message provided' }, { status: 400 });
     }
 
-    // Fetch live FAQs from Firestore and append to system prompt
-    let systemPrompt = buildSystemPromptPrefix(new Date());
-    try {
-      const firestore = getServerFirestore();
-      const snap = await getDocs(
-        query(collection(firestore, 'faqs'), orderBy('order', 'asc'))
+    const trimmedMessage = userMessage.trim();
+
+    if (trimmedMessage.length > MAX_MESSAGE_CHARS) {
+      // Not a strike — an honest visitor who pasted too much just needs telling.
+      return NextResponse.json(
+        {
+          response:
+            `That message is a little long for me to read (${trimmedMessage.length} characters, ` +
+            `limit ${MAX_MESSAGE_CHARS}). Could you shorten it, or email booking@bishopshullhub.co.uk?`,
+        },
+        { status: 200 }
       );
-      if (!snap.empty) {
-        const faqLines = snap.docs
-          .map((d) => {
-            const data = d.data() as { q?: string; a?: string };
-            return data.q && data.a ? `Q: ${data.q}\nA: ${data.a}` : null;
-          })
-          .filter(Boolean)
-          .join('\n\n');
-        if (faqLines) {
-          systemPrompt += `\n\n--- LIVE FAQs ---\n${faqLines}\n--- END FAQs ---`;
-        }
-      }
-    } catch {
-      // Continue without FAQs — the static facts are sufficient
+    }
+
+    // Decided before any billable work happens.
+    const clientKey = getChatClientKey(request.headers);
+    const allowance = checkChatAllowance(clientKey, trimmedMessage);
+    if (!allowance.allowed) {
+      console.warn(
+        `[chat-route] blocked ${clientKey} (rule=${allowance.rule}, ` +
+        `retry in ${allowance.retryAfterSeconds}s)`
+      );
+      return NextResponse.json(
+        { blocked: true, response: BLOCKED_MESSAGE },
+        { status: 429, headers: { 'Retry-After': String(allowance.retryAfterSeconds) } }
+      );
+    }
+
+    let systemPrompt = buildSystemPromptPrefix(new Date());
+    const faqText = await getLiveFaqText();
+    if (faqText) {
+      systemPrompt += `\n\n--- LIVE FAQs ---\n${faqText}\n--- END FAQs ---`;
     }
 
     const result = await hireChatbotFlow({
       systemPrompt,
-      history: messages ?? [],
-      userMessage: userMessage.trim(),
+      history: trimHistory(messages ?? []),
+      userMessage: trimmedMessage,
     });
 
     return NextResponse.json({

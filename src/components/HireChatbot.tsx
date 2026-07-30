@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageCircle, X, Send, Loader2, Bot, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { MessageCircle, X, Send, Loader2, Bot, CheckCircle2, AlertTriangle, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -11,11 +11,13 @@ import { sendEnquiryEmailAction } from '@/app/actions/send-email';
 
 type MessageRole = 'user' | 'model';
 type MessageKind = 'text' | 'system';
+type MessageTone = 'success' | 'error';
 
 interface Message {
   role: MessageRole;
   text: string;
   kind?: MessageKind; // 'system' = stylised confirmation/error pill, not part of LLM history
+  tone?: MessageTone; // styling for 'system' pills; defaults to success
 }
 
 interface PreparedSubmission {
@@ -165,6 +167,7 @@ export default function HireChatbot() {
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [showNudge, setShowNudge] = useState(false);
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -260,6 +263,7 @@ export default function HireChatbot() {
           {
             role: 'model',
             kind: 'system',
+            tone: 'error',
             text: "I couldn't save your enquiry to our system. Please try submitting via the website form at /hire#booking-form, or email booking@bishopshullhub.co.uk.",
           },
         ]);
@@ -272,7 +276,7 @@ export default function HireChatbot() {
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || loading || blocked) return;
 
     const userMessage: Message = { role: 'user', text };
     const nextMessages = [...messages, userMessage];
@@ -301,8 +305,25 @@ export default function HireChatbot() {
       const data = (await res.json()) as {
         response?: string;
         error?: string;
+        blocked?: boolean;
         submission?: PreparedSubmission;
       };
+
+      // Abuse limits tripped: show the hand-off to the bookings inbox and stop
+      // sending, rather than letting them keep hammering a closed endpoint.
+      if (res.status === 429 || data.blocked) {
+        setBlocked(true);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'model',
+            kind: 'system',
+            tone: 'error',
+            text: data.response ?? 'This chat is temporarily unavailable. Please email booking@bishopshullhub.co.uk.',
+          },
+        ]);
+        return;
+      }
 
       const responseText =
         data.response ?? data.error ?? 'Sorry, something went wrong. Please try again.';
@@ -323,7 +344,7 @@ export default function HireChatbot() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages, submitPreparedEnquiry]);
+  }, [input, loading, blocked, messages, submitPreparedEnquiry]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -368,7 +389,7 @@ export default function HireChatbot() {
             <div className="flex flex-col gap-3">
               {messages.map((msg, i) => {
                 if (msg.kind === 'system') {
-                  const isError = msg.text.toLowerCase().startsWith("i couldn't");
+                  const isError = msg.tone === 'error';
                   return (
                     <div key={i} className="flex justify-center">
                       <div
@@ -421,27 +442,39 @@ export default function HireChatbot() {
             </div>
           </div>
 
-          {/* Input */}
-          <div className="flex items-center gap-2 px-3 py-3 border-t border-border shrink-0">
-            <Input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about hiring the Hub…"
-              disabled={loading}
-              className="flex-1 h-9 text-sm rounded-xl border-border focus-visible:ring-primary"
-            />
-            <Button
-              size="icon"
-              onClick={sendMessage}
-              disabled={!input.trim() || loading}
-              className="h-9 w-9 rounded-xl shrink-0"
-              aria-label="Send message"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
+          {/* Input — replaced by a hand-off to the bookings inbox once blocked */}
+          {blocked ? (
+            <div className="px-3 py-3 border-t border-border shrink-0">
+              <a
+                href="mailto:booking@bishopshullhub.co.uk"
+                className="flex items-center justify-center gap-2 h-9 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                <Mail className="h-4 w-4" />
+                Email the bookings team
+              </a>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-3 border-t border-border shrink-0">
+              <Input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask about hiring the Hub…"
+                disabled={loading}
+                className="flex-1 h-9 text-sm rounded-xl border-border focus-visible:ring-primary"
+              />
+              <Button
+                size="icon"
+                onClick={sendMessage}
+                disabled={!input.trim() || loading}
+                className="h-9 w-9 rounded-xl shrink-0"
+                aria-label="Send message"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
