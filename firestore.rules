@@ -37,6 +37,21 @@ service cloud.firestore {
       return request.resource.data.id == resource.data.id;
     }
 
+    // Bank details and the signature image live in the admin-only `private`
+    // subcollection, never on the enquiry itself — the enquiry doc is publicly
+    // gettable so the hirer and security reviewer can load it by link.
+    function noPaymentFieldsOnEnquiry() {
+      return !('confirmation' in request.resource.data)
+        || !request.resource.data.confirmation.keys().hasAny(
+             ['bankName', 'accountNumber', 'sortCode', 'accountName', 'signatureDataUrl']
+           );
+    }
+
+    function enquiryAwaitingConfirmation(enquiryId) {
+      return get(/databases/$(database)/documents/booking_enquiries/$(enquiryId))
+               .data.confirmationStatus == 'Sent';
+    }
+
     // --- Collection Rules ---
 
     match /booking_enquiries/{enquiryId} {
@@ -57,7 +72,8 @@ service cloud.firestore {
       allow update: if (isExistingAdmin() && idIsImmutable()) || (
         request.resource.data.status == 'Reviewed' &&
         request.resource.data.id == resource.data.id &&
-        request.resource.data.name == resource.data.name // Ensure other data stays consistent
+        request.resource.data.name == resource.data.name && // Ensure other data stays consistent
+        noPaymentFieldsOnEnquiry()
       ) || (
         request.resource.data.confirmationStatus == 'Submitted' &&
         resource.data.confirmationStatus == 'Sent' &&
@@ -65,10 +81,25 @@ service cloud.firestore {
         request.resource.data.name == resource.data.name &&
         request.resource.data.dateRequired == resource.data.dateRequired &&
         request.resource.data.emailAddress == resource.data.emailAddress &&
-        request.resource.data.status == resource.data.status
+        request.resource.data.status == resource.data.status &&
+        noPaymentFieldsOnEnquiry()
       );
 
       allow delete: if isExistingAdmin();
+
+      // Bank details + signature for the deposit return. Readable only by
+      // admins; the hirer writes it once, from the confirmation link, while the
+      // booking is still awaiting their confirmation. After the enquiry flips to
+      // 'Submitted' the public write window closes.
+      match /private/{docId} {
+        // Admins read it to process the refund, and write it when migrating
+        // details off legacy enquiry docs.
+        allow read, write: if isAdmin();
+        // The hirer supplies these from their confirmation link. `create` also
+        // covers a retry if the follow-up write to the enquiry failed.
+        allow create, update: if docId == 'payment'
+          && enquiryAwaitingConfirmation(enquiryId);
+      }
     }
 
     match /community_initiatives/{initiativeId} {

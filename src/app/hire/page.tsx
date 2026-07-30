@@ -300,11 +300,22 @@ export default function HirePage() {
       const docRef = doc(firestore, 'booking_enquiries', enquiryId);
       setDocumentNonBlocking(docRef, enquiryData, {});
 
-      await sendEnquiryEmailAction(enquiryData);
+      const emailResult = await sendEnquiryEmailAction(enquiryData);
 
-      setSubmittedData(enquiryData);
+      // If the bookings inbox never got the notification, the enquiry is
+      // effectively lost — say so rather than showing the success screen.
+      if (!emailResult?.success) {
+        toast({
+          variant: "destructive",
+          title: "Enquiry not sent",
+          description: "We couldn't reach our bookings inbox. Please try again, or email booking@bishopshullhub.co.uk directly.",
+        });
+        return;
+      }
+
+      setSubmittedData({ ...enquiryData, customerEmailSent: emailResult.customerEmailSent !== false });
       setIsSubmitted(true);
-      
+
       toast({
         title: "Enquiry Sent",
         description: "We've received your booking enquiry and will be in touch shortly.",
@@ -388,7 +399,11 @@ ${submittedData.additionalRequirements}
             <div className="bg-accent/10 border border-accent/20 p-4 rounded-xl flex gap-3 items-start">
               <Mail className="h-4 w-4 md:h-5 md:w-5 text-primary shrink-0 mt-0.5" />
               <p className="text-xs md:text-sm text-muted-foreground">
-                A confirmation email has been sent to <strong className="text-foreground">{submittedData.emailAddress}</strong> with a copy of your enquiry details.
+                {submittedData.customerEmailSent ? (
+                  <>A confirmation email has been sent to <strong className="text-foreground">{submittedData.emailAddress}</strong> with a copy of your enquiry details.</>
+                ) : (
+                  <>Your enquiry has reached our bookings team, but we couldn&apos;t send your confirmation email to <strong className="text-foreground">{submittedData.emailAddress}</strong>. Please keep a copy of the summary below for your records.</>
+                )}
               </p>
             </div>
 

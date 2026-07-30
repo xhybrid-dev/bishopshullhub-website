@@ -1,6 +1,7 @@
 'use server';
 
 import { getHallmasterEvents } from '@/lib/hallmaster-ical';
+import { ukDateTimeToInstant } from '@/lib/uk-time';
 import { endsByClosing, closingLabelForDate, CLOSING_RULE_TEXT } from '@/lib/venue-hours';
 
 export type ClashingEvent = {
@@ -46,6 +47,15 @@ export async function checkAvailabilityAction(
   endTime: string     // "HH:mm"
 ): Promise<AvailabilityResult> {
   try {
+    // The hirer's date/time are UK wall-clock values; the feed gives absolute
+    // instants. Resolving them in Europe/London keeps the comparison honest
+    // year-round rather than only during GMT.
+    const requestedStart = ukDateTimeToInstant(date, startTime);
+    const requestedEnd   = ukDateTimeToInstant(date, endTime);
+
+    if (isNaN(requestedStart.getTime()) || isNaN(requestedEnd.getTime())) {
+      return { status: 'error', message: 'That date or time could not be read. Please re-enter them and try again.' };
+    }
     // Closing-time policy: reject requests ending after the venue's closing
     // time for that day before touching the live calendar.
     if (!endsByClosing(date, endTime)) {
@@ -67,6 +77,9 @@ export async function checkAvailabilityAction(
 
     Object.values(events).forEach((event) => {
       if (event.type !== 'VEVENT') return;
+      // A cancelled booking doesn't hold the slot — the calendar view already
+      // skips these, so the availability check has to as well.
+      if (event.status?.toUpperCase() === 'CANCELLED') return;
 
       const eventStart = new Date(event.start);
       const eventEnd   = new Date(event.end);

@@ -185,6 +185,7 @@ export default function HomePage() {
               src={youthImage?.imageUrl || "https://picsum.photos/seed/bhh-youth/600/400"}
               alt="Youth Activities"
               fill
+              sizes="(max-width: 1024px) 100vw, 50vw"
               className="object-cover"
               data-ai-hint="teens playing games"
             />

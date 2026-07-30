@@ -1,6 +1,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { checkAvailabilityAction } from '@/app/actions/check-availability';
+import { ukDateToInstant, ukStartOfToday } from '@/lib/uk-time';
 import { endsByClosing, CLOSING_RULE_TEXT } from '@/lib/venue-hours';
 
 const checkAvailabilityTool = ai.defineTool(
@@ -165,10 +166,11 @@ const prepareHireEnquiryTool = ai.defineTool(
 
       // 14-day advance notice rule
       try {
-        const requestedDate = new Date(`${fields.dateRequired}T00:00:00`);
-        const minDate = new Date();
-        minDate.setHours(0, 0, 0, 0);
-        minDate.setDate(minDate.getDate() + 14);
+        // Anchored to the UK day, not the server's (UTC) one, so a late-evening
+        // enquiry during BST isn't measured against yesterday.
+        const requestedDate = ukDateToInstant(fields.dateRequired);
+        const minDate = new Date(ukStartOfToday().getTime());
+        minDate.setUTCDate(minDate.getUTCDate() + 14);
         if (Number.isNaN(requestedDate.getTime())) {
           errors.push('Date could not be parsed — please reconfirm in YYYY-MM-DD format.');
         } else if (requestedDate < minDate) {
