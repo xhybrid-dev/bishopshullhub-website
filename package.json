@@ -11,7 +11,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test:rules": "firebase emulators:exec --only firestore --project bhh-rules-test \"node tests/firestore-rules.test.mjs\"",
-    "test:rate-limit": "tsx tests/chat-rate-limit.test.ts"
+    "test:rate-limit": "tsx tests/chat-rate-limit.test.ts",
+    "test:buckets": "tsx tests/booking-buckets.test.ts"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.28.0",
