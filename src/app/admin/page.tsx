@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, LayoutDashboard, LogOut, Inbox, Mail, Calendar, CalendarDays, ShieldAlert, FileText, CheckCircle2, MoreVertical, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, Trash2, Send, AlertTriangle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle, RefreshCw, MessageSquare } from 'lucide-react';
+import { Loader2, LayoutDashboard, LogOut, Inbox, Mail, Calendar, CalendarDays, ShieldAlert, FileText, CheckCircle2, MoreVertical, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, Trash2, Send, AlertTriangle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle, RefreshCw, MessageSquare, Eye, Receipt, XCircle } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, useDoc, setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, orderBy, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +18,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { sendSecurityReviewEmailAction, sendHireConfirmationInviteAction, sendDepositReturnEmailAction } from '@/app/actions/send-email';
+import { sendSecurityReviewEmailAction, sendHireConfirmationInviteAction, sendDepositReturnEmailAction, sendProvisionalFirstBookingEmailAction, sendProvisionalRepeatHirerEmailAction, sendDateNotAvailableEmailAction } from '@/app/actions/send-email';
+import { bucketForEnquiry, BUCKET_LABELS, type BookingBucket } from '@/lib/booking-buckets';
 import { getLiveCalendarEventsAction, type LiveEvent } from '@/app/actions/get-calendar';
 import type { ClashingEvent } from '@/app/actions/check-availability';
 import { EnquiryCalendarView } from '@/components/admin/EnquiryCalendarView';
@@ -26,19 +27,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { format, startOfToday, parseISO, subDays } from 'date-fns';
 import { endsByClosing, CLOSING_RULE_TEXT } from '@/lib/venue-hours';
 
-const STATUS_COLUMNS = [
-  { id: 'Pending', label: 'Enquiry Received', color: 'bg-amber-500', icon: Clock3 },
-  { id: 'Reviewed', label: 'Visit Complete', color: 'bg-blue-500', icon: FileText },
-  { id: 'Confirmed', label: 'Hire Confirmed', color: 'bg-green-500', icon: CheckCircle2 },
+// Bucket columns mirror the bookings secretary's workflow: the amber/blue/green
+// ones are "waiting on us" (create the booking, send the confirmation, send the
+// invoice); the others are waiting on the hirer or the management team.
+const BUCKET_COLUMNS: Array<{ id: BookingBucket; label: string; color: string; icon: any; needsAction?: boolean }> = [
+  { id: 'EnquiryReceived', label: 'Enquiry Received', color: 'bg-amber-500', icon: Clock3, needsAction: true },
+  { id: 'AwaitingViewing', label: 'Awaiting Viewing', color: 'bg-purple-500', icon: Eye },
+  { id: 'VisitComplete', label: 'Visit Complete', color: 'bg-blue-500', icon: FileText, needsAction: true },
+  { id: 'AwaitingAgreement', label: 'Awaiting Hire Agreement', color: 'bg-sky-500', icon: FileSignature },
+  { id: 'HireConfirmed', label: 'Hire Confirmed', color: 'bg-green-500', icon: CheckCircle2, needsAction: true },
+  { id: 'InvoiceSent', label: 'Invoice Sent', color: 'bg-teal-600', icon: Receipt },
   { id: 'HireComplete', label: 'Hire Complete', color: 'bg-slate-500', icon: Calendar },
 ];
-
-const STATUS_LABELS: Record<string, string> = {
-  Pending: 'Enquiry Received',
-  Reviewed: 'Visit Complete',
-  Confirmed: 'Hire Confirmed',
-  Rejected: 'Rejected',
-};
 
 function getDepositAmount(enquiry: any): number {
   const stored = Number(enquiry?.depositAmount ?? enquiry?.confirmation?.depositAmount);
@@ -217,7 +217,7 @@ export default function AdminPortal() {
       // Hide HireComplete (logged in Hallmaster already)
       if (hirerConfirmed && isPast) return false;
       if (status === 'Confirmed' && isPast) return false;
-      if (status === 'Rejected') return false;
+      if (status === 'Rejected' || status === 'NotAvailable') return false;
       return true;
     });
   }, [visibleEnquiries]);
@@ -249,13 +249,155 @@ export default function AdminPortal() {
 
   const [editingEnquiry, setEditingEnquiry] = useState<any | null>(null);
 
-  const handleUpdateStatus = async (enquiryId: string, newStatus: string) => {
+  // "Provisional Booking Made" — the secretary has created the booking on
+  // Hallmaster. First-time hirers get a viewing next; repeat hirers get the
+  // hire agreement link straight away.
+  const handleProvisionalBooking = async (enquiry: any, kind: 'FirstBooking' | 'RepeatHirer') => {
+    const now = new Date().toISOString();
+    const docRef = doc(firestore, 'booking_enquiries', enquiry.id);
+    // Legacy statuses would otherwise pin the card in the wrong bucket.
+    const statusReset = ['Confirmed', 'NotAvailable', 'Rejected'].includes(enquiry.status)
+      ? { status: 'Pending' }
+      : {};
     try {
-      const docRef = doc(firestore, 'booking_enquiries', enquiryId);
-      await updateDoc(docRef, { status: newStatus });
-      toast({ title: "Status Updated", description: `Enquiry set to ${newStatus}.` });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Update Failed", description: "Permissions error." });
+      if (kind === 'RepeatHirer') {
+        // The emailed agreement link only works once confirmationStatus is
+        // 'Sent', so the write has to land before the email goes out.
+        await updateDoc(docRef, {
+          ...statusReset,
+          provisionalStatus: 'RepeatHirer',
+          provisionalAt: now,
+          confirmationStatus: 'Sent',
+          confirmationSentAt: now,
+        });
+        const result = await sendProvisionalRepeatHirerEmailAction(enquiry, window.location.origin);
+        if (result.success) {
+          toast({ title: 'Provisional Booking Recorded', description: `${enquiry.name} has been emailed the hire agreement link.` });
+        } else {
+          toast({ variant: 'destructive', title: 'Email Failed', description: `${result.error || 'Could not send the email.'} The booking has moved to Awaiting Hire Agreement — use Resend Confirmation to retry.` });
+        }
+        return;
+      }
+
+      // First booking: email first, then record — if the email fails nothing
+      // has moved and the button can simply be pressed again.
+      const result = await sendProvisionalFirstBookingEmailAction(enquiry);
+      if (!result.success) {
+        toast({ variant: 'destructive', title: 'Email Failed', description: result.error || 'Could not send the email. Nothing has been changed — please try again.' });
+        return;
+      }
+      await updateDoc(docRef, {
+        ...statusReset,
+        provisionalStatus: 'FirstBooking',
+        provisionalAt: now,
+        viewingCompletedAt: null,
+      });
+      toast({ title: 'Provisional Booking Recorded', description: `${enquiry.name} has been emailed — now awaiting a viewing.` });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not record the provisional booking.' });
+    }
+  };
+
+  const handleNotAvailable = async (enquiry: any) => {
+    try {
+      const result = await sendDateNotAvailableEmailAction(enquiry);
+      if (!result.success) {
+        toast({ variant: 'destructive', title: 'Email Failed', description: result.error || 'Could not send the email. Nothing has been changed — please try again.' });
+        return;
+      }
+      await updateDoc(doc(firestore, 'booking_enquiries', enquiry.id), {
+        status: 'NotAvailable',
+        notAvailableAt: new Date().toISOString(),
+      });
+      toast({ title: 'Marked Not Available', description: `${enquiry.name} has been emailed and the enquiry closed. Undo via the card menu in List view if needed.` });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not close the enquiry.' });
+    }
+  };
+
+  const handleMarkViewingComplete = async (enquiry: any) => {
+    try {
+      await updateDoc(doc(firestore, 'booking_enquiries', enquiry.id), {
+        viewingCompletedAt: new Date().toISOString(),
+      });
+      toast({ title: 'Viewing Complete', description: `${enquiry.name} is ready for the hire confirmation.` });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not update the booking.' });
+    }
+  };
+
+  const handleMarkInvoiceSent = async (enquiry: any) => {
+    try {
+      await updateDoc(doc(firestore, 'booking_enquiries', enquiry.id), {
+        invoiceSentAt: new Date().toISOString(),
+      });
+      toast({ title: 'Invoice Marked Sent', description: `${enquiry.name} moved to Invoice Sent.` });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not update the booking.' });
+    }
+  };
+
+  // Manual corrections via the card menu — no emails are sent from here.
+  const handleMoveBucket = async (enquiry: any, target: string) => {
+    const now = new Date().toISOString();
+    const updates: Record<string, any> = {};
+    const agreementSent = enquiry.confirmationStatus === 'Sent';
+    const backward = ['EnquiryReceived', 'AwaitingViewing', 'VisitComplete'].includes(target);
+
+    if (enquiry.confirmationStatus === 'Submitted' && backward) {
+      toast({ variant: 'destructive', title: 'Cannot Move', description: 'The hirer has already signed the agreement — use Edit Details to change the booking instead.' });
+      return;
+    }
+
+    if (['Confirmed', 'NotAvailable', 'Rejected'].includes(enquiry.status) && target !== 'NotAvailable' && target !== 'Rejected') {
+      updates.status = 'Pending';
+    }
+
+    switch (target) {
+      case 'EnquiryReceived':
+        Object.assign(updates, {
+          provisionalStatus: null,
+          provisionalAt: null,
+          viewingCompletedAt: null,
+          invoiceSentAt: null,
+          ...(agreementSent ? { confirmationStatus: 'NotSent' } : {}),
+        });
+        break;
+      case 'AwaitingViewing':
+        Object.assign(updates, {
+          provisionalStatus: 'FirstBooking',
+          provisionalAt: enquiry.provisionalAt || now,
+          viewingCompletedAt: null,
+          invoiceSentAt: null,
+          ...(agreementSent ? { confirmationStatus: 'NotSent' } : {}),
+        });
+        break;
+      case 'VisitComplete':
+        Object.assign(updates, {
+          viewingCompletedAt: enquiry.viewingCompletedAt || now,
+          invoiceSentAt: null,
+          ...(agreementSent ? { confirmationStatus: 'NotSent' } : {}),
+        });
+        break;
+      case 'HireConfirmed': // undo a mistaken "invoice sent"
+        updates.invoiceSentAt = null;
+        break;
+      case 'NotAvailable':
+        updates.status = 'NotAvailable';
+        break;
+      case 'Rejected':
+        updates.status = 'Rejected';
+        break;
+      default:
+        return;
+    }
+
+    try {
+      await updateDoc(doc(firestore, 'booking_enquiries', enquiry.id), updates);
+      const label = BUCKET_LABELS[target as BookingBucket] ?? target;
+      toast({ title: 'Booking Moved', description: `Moved to ${label}. No email was sent.` });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not move the booking.' });
     }
   };
 
@@ -312,6 +454,11 @@ export default function AdminPortal() {
       const baseUrl = window.location.origin;
       const result = await sendSecurityReviewEmailAction(enquiry, securityContacts, baseUrl);
       if (result.success) {
+        // Recorded so the card can show "review requested" — previously there
+        // was no way to tell a sent review from an unsent one.
+        await updateDoc(doc(firestore, 'booking_enquiries', enquiry.id), {
+          securityReviewRequestedAt: new Date().toISOString(),
+        });
         toast({ title: "Review Sent", description: "Security Team has been notified." });
       } else {
         toast({ variant: "destructive", title: "Send Failed", description: result.error || "Could not dispatch emails." });
@@ -517,35 +664,26 @@ export default function AdminPortal() {
               />
             ) : visibleEnquiries && visibleEnquiries.length > 0 ? (
               viewMode === 'kanban' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
-                  {STATUS_COLUMNS.map((col) => {
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+                  {BUCKET_COLUMNS.map((col) => {
                     const today = startOfToday();
                     const isPastDate = (e: any) => {
                       try { return parseISO(e.dateRequired) < today; } catch { return false; }
                     };
-                    const inColumn = (e: any) => {
-                      const status = e.status || 'Pending';
-                      const hirerConfirmed = e.confirmationStatus === 'Submitted';
-                      if (hirerConfirmed) {
-                        if (col.id === 'HireComplete') return isPastDate(e);
-                        if (col.id === 'Confirmed') return !isPastDate(e);
-                        return false;
-                      }
-                      if (col.id === 'HireComplete') return status === 'Confirmed' && isPastDate(e);
-                      if (col.id === 'Confirmed') return status === 'Confirmed' && !isPastDate(e);
-                      return status === col.id;
-                    };
-                    const items = visibleEnquiries.filter(inColumn);
+                    const items = visibleEnquiries.filter(e => bucketForEnquiry(e, isPastDate(e)) === col.id);
                     return (
                       <div key={col.id} className="flex flex-col gap-4">
                         <div className="flex items-center gap-2 px-2">
                           <div className={cn("w-2 h-2 rounded-full", col.color)} />
-                          <h3 className="font-bold text-primary">{col.label}</h3>
+                          <h3 className="font-bold text-primary text-sm">{col.label}</h3>
                           <Badge variant="secondary">{items.length}</Badge>
+                          {col.needsAction && items.length > 0 && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600">Action</span>
+                          )}
                         </div>
-                        <div className="flex flex-col gap-4 bg-muted/20 p-3 rounded-2xl min-h-[400px] border-2 border-dashed border-muted">
+                        <div className="flex flex-col gap-4 bg-muted/20 p-3 rounded-2xl min-h-[300px] border-2 border-dashed border-muted">
                           {items.map(e => (
-                            <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} />
+                            <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onMoveBucket={handleMoveBucket} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onProvisionalBooking={handleProvisionalBooking} onNotAvailable={handleNotAvailable} onMarkViewingComplete={handleMarkViewingComplete} onMarkInvoiceSent={handleMarkInvoiceSent} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} />
                           ))}
                         </div>
                       </div>
@@ -554,7 +692,7 @@ export default function AdminPortal() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {visibleEnquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onUpdateStatus={handleUpdateStatus} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} isList />)}
+                  {visibleEnquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onMoveBucket={handleMoveBucket} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onProvisionalBooking={handleProvisionalBooking} onNotAvailable={handleNotAvailable} onMarkViewingComplete={handleMarkViewingComplete} onMarkInvoiceSent={handleMarkInvoiceSent} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} isList />)}
                 </div>
               )
             ) : (
@@ -815,38 +953,33 @@ export default function AdminPortal() {
   );
 }
 
-function KanbanCard({ enquiry, clashes, onUpdateStatus, onSendToSecurity, onSendConfirmation, onEdit, onAcknowledgeSecurityComments, isList }: { enquiry: any, clashes?: ClashingEvent[], onUpdateStatus: (id: string, s: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onEdit: (e: any) => void, onAcknowledgeSecurityComments: (id: string) => void, isList?: boolean }) {
+function KanbanCard({ enquiry, clashes, onMoveBucket, onSendToSecurity, onSendConfirmation, onProvisionalBooking, onNotAvailable, onMarkViewingComplete, onMarkInvoiceSent, onEdit, onAcknowledgeSecurityComments, isList }: { enquiry: any, clashes?: ClashingEvent[], onMoveBucket: (e: any, target: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onProvisionalBooking: (e: any, kind: 'FirstBooking' | 'RepeatHirer') => Promise<void>, onNotAvailable: (e: any) => Promise<void>, onMarkViewingComplete: (e: any) => Promise<void>, onMarkInvoiceSent: (e: any) => Promise<void>, onEdit: (e: any) => void, onAcknowledgeSecurityComments: (id: string) => void, isList?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isSending, setIsSending] = useState(false);
-  const [isSendingConfirm, setIsSendingConfirm] = useState(false);
-  const [isAcknowledging, setIsAcknowledging] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const hasClash = (clashes?.length ?? 0) > 0;
   const securityComments: string | undefined = enquiry.securityComments;
   const hasPendingSecurityComments = !!(securityComments && securityComments.trim()) && enquiry.securityCommentsAcknowledged !== true;
 
-  const handleReviewClick = async (e: React.MouseEvent) => {
+  const isPastDate = (() => {
+    try { return parseISO(enquiry.dateRequired) < startOfToday(); } catch { return false; }
+  })();
+  const bucket = bucketForEnquiry(enquiry, isPastDate);
+
+  // Wraps an async card action with a busy flag so double-clicks can't fire
+  // an email twice, and stops the click from toggling the card open.
+  const run = (action: string, fn: () => Promise<void> | void) => async (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsSending(true);
-    await onSendToSecurity(enquiry);
-    setIsSending(false);
+    if (busyAction) return;
+    setBusyAction(action);
+    try { await fn(); } finally { setBusyAction(null); }
   };
 
-  const handleConfirmClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsSendingConfirm(true);
-    await onSendConfirmation(enquiry);
-    setIsSendingConfirm(false);
-  };
-
-  const handleAcknowledgeClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsAcknowledging(true);
-    await onAcknowledgeSecurityComments(enquiry.id);
-    setIsAcknowledging(false);
-  };
+  const busyIcon = (action: string, Icon: any) =>
+    busyAction === action ? <Loader2 className="h-3 w-3 animate-spin" /> : <Icon className="h-3 w-3" />;
 
   const confirmationStatus = enquiry.confirmationStatus as ('NotSent' | 'Sent' | 'Submitted' | undefined);
-  const showConfirmButton = enquiry.status === 'Reviewed' || enquiry.status === 'Confirmed';
+  const reviewComplete = enquiry.status === 'Reviewed';
+  const reviewRequested = !!enquiry.securityReviewRequestedAt;
 
   return (
     <Card className={cn("border shadow-sm hover:shadow-md transition-all bg-white cursor-pointer overflow-hidden", isExpanded && "ring-2 ring-primary", hasClash && "border-red-400 bg-red-50/40", hasPendingSecurityComments && "border-amber-500 ring-2 ring-amber-400 bg-amber-50/40")} onClick={() => setIsExpanded(!isExpanded)}>
@@ -864,10 +997,10 @@ function KanbanCard({ enquiry, clashes, onUpdateStatus, onSendToSecurity, onSend
               variant="default"
               size="sm"
               className="w-full h-7 text-[10px] gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
-              onClick={handleAcknowledgeClick}
-              disabled={isAcknowledging}
+              onClick={run('ack', () => onAcknowledgeSecurityComments(enquiry.id))}
+              disabled={!!busyAction}
             >
-              {isAcknowledging ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+              {busyIcon('ack', CheckCircle2)}
               Mark as Actioned
             </Button>
           </div>
@@ -899,9 +1032,25 @@ function KanbanCard({ enquiry, clashes, onUpdateStatus, onSendToSecurity, onSend
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(enquiry); }}>
                 <Pencil className="h-3 w-3 mr-2" /> Edit Details
               </DropdownMenuItem>
-              {['Pending', 'Reviewed', 'Confirmed', 'Rejected'].map(s => (
-                <DropdownMenuItem key={s} onClick={(e) => { e.stopPropagation(); onUpdateStatus(enquiry.id, s); }}>Mark as {STATUS_LABELS[s] ?? s}</DropdownMenuItem>
-              ))}
+              {/* Manual corrections — none of these send an email */}
+              {bucket !== 'EnquiryReceived' && (
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveBucket(enquiry, 'EnquiryReceived'); }}>Move to Enquiry Received</DropdownMenuItem>
+              )}
+              {bucket !== 'AwaitingViewing' && (
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveBucket(enquiry, 'AwaitingViewing'); }}>Move to Awaiting Viewing</DropdownMenuItem>
+              )}
+              {bucket !== 'VisitComplete' && (
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveBucket(enquiry, 'VisitComplete'); }}>Move to Visit Complete</DropdownMenuItem>
+              )}
+              {enquiry.invoiceSentAt && (
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveBucket(enquiry, 'HireConfirmed'); }}>Undo Invoice Sent</DropdownMenuItem>
+              )}
+              {enquiry.status !== 'NotAvailable' && (
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveBucket(enquiry, 'NotAvailable'); }}>Mark Not Available (no email)</DropdownMenuItem>
+              )}
+              {enquiry.status !== 'Rejected' && (
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveBucket(enquiry, 'Rejected'); }}>Mark as Rejected</DropdownMenuItem>
+              )}
             </DropdownMenuContent>
            </DropdownMenu>
         </div>
@@ -942,36 +1091,144 @@ function KanbanCard({ enquiry, clashes, onUpdateStatus, onSendToSecurity, onSend
           </div>
         )}
 
-        {enquiry.status === 'Pending' && (
-          <Button
-            variant="secondary"
-            size="sm"
-            className="w-full gap-2 text-[10px] h-8 mt-2"
-            onClick={handleReviewClick}
-            disabled={isSending}
-          >
-            {isSending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-            Request Security Review
-          </Button>
+        {/* Security review state — a badge, not a bucket move */}
+        {bucket === 'EnquiryReceived' && (reviewComplete || reviewRequested) && (
+          <div className={cn(
+            "flex items-center justify-center gap-1.5 text-[10px] font-bold rounded-md py-1 mt-2 border",
+            reviewComplete
+              ? "text-green-700 bg-green-50 border-green-200"
+              : "text-amber-700 bg-amber-50 border-amber-200"
+          )}>
+            <ShieldCheck className="h-3 w-3" />
+            {reviewComplete
+              ? 'Security review complete'
+              : `Review requested ${formatUKDate(enquiry.securityReviewRequestedAt?.substring(0, 10)) || ''}`}
+          </div>
         )}
 
-        {showConfirmButton && confirmationStatus !== 'Submitted' && (
+        {bucket === 'EnquiryReceived' && (
+          <div className="space-y-1.5 mt-2" onClick={(e) => e.stopPropagation()}>
+            {!reviewComplete && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full gap-2 text-[10px] h-8"
+                onClick={run('security', () => onSendToSecurity(enquiry))}
+                disabled={!!busyAction}
+              >
+                {busyIcon('security', Send)}
+                {reviewRequested ? 'Resend Security Review' : 'Request Security Review'}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              className="w-full gap-2 text-[10px] h-8"
+              onClick={run('prov-first', () => onProvisionalBooking(enquiry, 'FirstBooking'))}
+              disabled={!!busyAction}
+              title="Emails the hirer that a provisional booking is made and a viewing will be arranged"
+            >
+              {busyIcon('prov-first', CalendarDays)}
+              Provisional Made — First Booking
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full gap-2 text-[10px] h-8 border-primary/40 text-primary"
+              onClick={run('prov-repeat', () => onProvisionalBooking(enquiry, 'RepeatHirer'))}
+              disabled={!!busyAction}
+              title="Emails the hirer the hire agreement link — no viewing needed"
+            >
+              {busyIcon('prov-repeat', FileSignature)}
+              Provisional Made — Repeat Hirer
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full gap-2 text-[10px] h-8 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+              onClick={run('not-available', () => onNotAvailable(enquiry))}
+              disabled={!!busyAction}
+              title="Emails the hirer that the requested date/time is unavailable and closes the enquiry"
+            >
+              {busyIcon('not-available', XCircle)}
+              Date/Time Not Available
+            </Button>
+          </div>
+        )}
+
+        {bucket === 'AwaitingViewing' && (
+          <div className="space-y-1.5 mt-2" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-center gap-1.5 text-[10px] font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-md py-1">
+              <Eye className="h-3 w-3" />
+              Provisional made {formatUKDate(enquiry.provisionalAt?.substring(0, 10)) || ''} — viewing pending
+            </div>
+            <Button
+              size="sm"
+              className="w-full gap-2 text-[10px] h-8"
+              onClick={run('viewing-done', () => onMarkViewingComplete(enquiry))}
+              disabled={!!busyAction}
+            >
+              {busyIcon('viewing-done', CheckCircle2)}
+              Mark Viewing Complete
+            </Button>
+          </div>
+        )}
+
+        {bucket === 'VisitComplete' && (
           <Button
             variant="default"
             size="sm"
             className="w-full gap-2 text-[10px] h-8 mt-2"
-            onClick={handleConfirmClick}
-            disabled={isSendingConfirm}
+            onClick={run('confirm', () => onSendConfirmation(enquiry))}
+            disabled={!!busyAction}
           >
-            {isSendingConfirm ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileSignature className="h-3 w-3" />}
-            {confirmationStatus === 'Sent' ? 'Resend Confirmation' : 'Send Confirmation'}
+            {busyIcon('confirm', FileSignature)}
+            Send Hire Confirmation
           </Button>
         )}
 
-        {confirmationStatus === 'Submitted' && (
+        {bucket === 'AwaitingAgreement' && (
+          <div className="space-y-1.5 mt-2" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-center gap-1.5 text-[10px] font-medium text-sky-700 bg-sky-50 border border-sky-200 rounded-md py-1">
+              <FileSignature className="h-3 w-3" />
+              Awaiting hirer signature
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-2 text-[10px] h-8"
+              onClick={run('confirm', () => onSendConfirmation(enquiry))}
+              disabled={!!busyAction}
+            >
+              {busyIcon('confirm', Send)}
+              Resend Confirmation
+            </Button>
+          </div>
+        )}
+
+        {(bucket === 'HireConfirmed' || bucket === 'HireComplete') && confirmationStatus === 'Submitted' && (
           <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-md py-1.5 mt-2">
             <CheckCircle2 className="h-3 w-3" />
             Hire Confirmed by Hirer
+          </div>
+        )}
+
+        {bucket === 'HireConfirmed' && (
+          <Button
+            size="sm"
+            className="w-full gap-2 text-[10px] h-8 mt-1.5"
+            onClick={run('invoice', () => onMarkInvoiceSent(enquiry))}
+            disabled={!!busyAction}
+            title="No email is sent — this records that you've sent the invoice"
+          >
+            {busyIcon('invoice', Receipt)}
+            Mark Invoice Sent
+          </Button>
+        )}
+
+        {bucket === 'InvoiceSent' && (
+          <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-200 rounded-md py-1.5 mt-2">
+            <Receipt className="h-3 w-3" />
+            Invoice sent {formatUKDate(enquiry.invoiceSentAt?.substring(0, 10)) || ''}
           </div>
         )}
       </div>

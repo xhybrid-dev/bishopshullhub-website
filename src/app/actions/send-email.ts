@@ -13,7 +13,10 @@ import { Resend } from 'resend';
 import { formatUKDate } from '@/lib/utils';
 import type { PaymentDetails } from '@/lib/payment-details';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// The placeholder keeps the constructor happy when no key is configured
+// (local dev) — every send site already routes to console simulation unless a
+// real key is present.
+const resend = new Resend(process.env.RESEND_API_KEY || 're_your_api_key_here');
 // Booking process inbox — new enquiries, bookings admin, security review CC.
 const ADMIN_EMAIL = 'booking@bishopshullhub.co.uk';
 // Post-confirmation / during-hire contact — surfaced to hirers once they're confirmed.
@@ -167,6 +170,9 @@ export async function sendEnquiryEmailAction(enquiryData: any) {
           subject: adminEmail.subject,
           html: adminEmail.htmlBody,
           text: adminEmail.textBody,
+          // Replying to the notification should start a thread with the
+          // hirer, not bounce back into the bookings inbox itself.
+          replyTo: enquiryData.emailAddress,
         }),
         resend.emails.send({
           from: 'Bishops Hull Hub <noreply@bishopshullhub.co.uk>',
@@ -544,6 +550,216 @@ Hirer Contact:   ${enquiryData.emailAddress} / ${enquiryData.phoneNumber}
   } catch (error: any) {
     console.error('Failed to send deposit return email:', error);
     return { success: false, error: error.message || 'Failed to send deposit return email' };
+  }
+}
+
+/**
+ * Shared shell for the workflow emails below (provisional booking / not
+ * available). Matches the visual language of the other templates in this file.
+ */
+function renderWorkflowEmail(input: {
+  heading: string;
+  reference: string;
+  bodyHtml: string;
+}) {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+      <div style="background-color: #1a4d46; color: #fff; padding: 24px; text-align: center;">
+        <h1 style="margin: 0; font-size: 22px;">${escapeHtml(input.heading)}</h1>
+        <p style="margin: 4px 0 0; opacity: 0.85; font-size: 13px;">Reference: ${escapeHtml(input.reference)}</p>
+      </div>
+      <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
+        ${input.bodyHtml}
+        <p style="font-size: 12px; color: #64748b; margin-top: 28px; text-align: center;">
+          Bishops Hull Hub &bull; booking@bishopshullhub.co.uk
+        </p>
+      </div>
+    </div>`;
+}
+
+function bookingSummaryHtml(enquiryData: any) {
+  const h = (v: unknown) => escapeHtml(v == null ? '' : String(v));
+  const displayDate = formatUKDate(enquiryData.dateRequired) || 'TBC';
+  return `
+    <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px; margin:16px 0;">
+      <p style="margin:3px 0;"><strong>Event:</strong> ${h(enquiryData.typeOfEvent)}</p>
+      <p style="margin:3px 0;"><strong>Date:</strong> ${h(displayDate)}</p>
+      <p style="margin:3px 0;"><strong>Times:</strong> ${h(enquiryData.startTime)} – ${h(enquiryData.endTime)}</p>
+    </div>`;
+}
+
+function bookingSummaryText(enquiryData: any) {
+  const displayDate = formatUKDate(enquiryData.dateRequired) || 'TBC';
+  return `Event: ${enquiryData.typeOfEvent}\nDate:  ${displayDate}\nTimes: ${enquiryData.startTime} – ${enquiryData.endTime}`;
+}
+
+async function sendWorkflowEmail(enquiryData: any, subject: string, htmlBody: string, textBody: string) {
+  if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('re_your_api_key')) {
+    const { error } = await resend.emails.send({
+      from: 'Bishops Hull Hub <bookings@bishopshullhub.co.uk>',
+      to: enquiryData.emailAddress,
+      subject,
+      html: htmlBody,
+      text: textBody,
+      replyTo: ADMIN_EMAIL,
+    });
+    if (error) throw new Error(`Resend Error: ${error.message}`);
+  } else {
+    console.log('--- WORKFLOW EMAIL SIMULATION ---');
+    console.log('To:', enquiryData.emailAddress);
+    console.log('Subject:', subject);
+    console.log(textBody);
+  }
+}
+
+/**
+ * Server Action — admin marks "Provisional Booking Made (First Booking)".
+ * Tells the hirer the slot is pencilled in and that the hall management team
+ * will be in touch to arrange a viewing.
+ */
+export async function sendProvisionalFirstBookingEmailAction(enquiryData: any) {
+  try {
+    if (!enquiryData?.emailAddress) {
+      return { success: false, error: 'Enquiry has no email address.' };
+    }
+    const h = (v: unknown) => escapeHtml(v == null ? '' : String(v));
+    const displayDate = formatUKDate(enquiryData.dateRequired) || 'TBC';
+    const subject = `Provisional Booking Made — Bishops Hull Hub, ${displayDate}`;
+
+    const textBody = `Hello ${enquiryData.name},
+
+Good news — we've made a provisional booking for you at the Bishops Hull Hub:
+
+${bookingSummaryText(enquiryData)}
+
+As this is your first booking with us, a member of the hall management team will be in touch shortly to arrange a viewing of the Hub. After the viewing, we'll send you the hire agreement to complete.
+
+Please note this booking remains provisional until the hire agreement is signed and payment arrangements are in place.
+
+Any questions in the meantime? Just reply to this email.
+
+Bishops Hull Hub`;
+
+    const htmlBody = renderWorkflowEmail({
+      heading: 'Provisional Booking Made',
+      reference: enquiryData.id,
+      bodyHtml: `
+        <p style="margin-top:0;">Hello ${h(enquiryData.name)},</p>
+        <p>Good news — we've made a <strong>provisional booking</strong> for you at the Bishops Hull Hub:</p>
+        ${bookingSummaryHtml(enquiryData)}
+        <p>As this is your first booking with us, a member of the hall management team will be in touch shortly to arrange a <strong>viewing of the Hub</strong>. After the viewing, we'll send you the hire agreement to complete.</p>
+        <p style="background-color:#fefce8; border:1px solid #fde68a; border-radius:8px; padding:12px; font-size:14px;">
+          This booking remains provisional until the hire agreement is signed and payment arrangements are in place.
+        </p>
+        <p>Any questions in the meantime? Just reply to this email.</p>`,
+    });
+
+    await sendWorkflowEmail(enquiryData, subject, htmlBody, textBody);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to send provisional (first booking) email:', error);
+    return { success: false, error: error.message || 'Failed to send email' };
+  }
+}
+
+/**
+ * Server Action — admin marks "Provisional Booking Made (Repeat Hirer)".
+ * No viewing needed: the email confirms the provisional booking and links
+ * straight to the hire agreement form. The caller must set
+ * confirmationStatus 'Sent' BEFORE calling, or the emailed link won't work.
+ */
+export async function sendProvisionalRepeatHirerEmailAction(enquiryData: any, baseUrl: string) {
+  try {
+    if (!enquiryData?.emailAddress) {
+      return { success: false, error: 'Enquiry has no email address.' };
+    }
+    const h = (v: unknown) => escapeHtml(v == null ? '' : String(v));
+    const displayDate = formatUKDate(enquiryData.dateRequired) || 'TBC';
+    const confirmUrl = `${baseUrl}/confirm/${enquiryData.id}`;
+    const subject = `Provisional Booking Made — please complete your hire agreement`;
+
+    const textBody = `Hello ${enquiryData.name},
+
+Good news — we've made a provisional booking for you at the Bishops Hull Hub:
+
+${bookingSummaryText(enquiryData)}
+
+As you've hired the Hub before, there's no need for another viewing. To secure the booking, please complete and sign the hire agreement here:
+
+${confirmUrl}
+
+Once we've received your signed agreement, we'll confirm the booking and arrange your invoice for payment.
+
+Any questions? Just reply to this email.
+
+Bishops Hull Hub`;
+
+    const htmlBody = renderWorkflowEmail({
+      heading: 'Provisional Booking Made',
+      reference: enquiryData.id,
+      bodyHtml: `
+        <p style="margin-top:0;">Hello ${h(enquiryData.name)},</p>
+        <p>Good news — we've made a <strong>provisional booking</strong> for you at the Bishops Hull Hub:</p>
+        ${bookingSummaryHtml(enquiryData)}
+        <p>As you've hired the Hub before, there's no need for another viewing. To secure the booking, please complete and sign the hire agreement:</p>
+        <div style="text-align:center; margin: 24px 0;">
+          <a href="${h(confirmUrl)}" style="background-color:#1a4d46; color:#fff; padding:14px 28px; text-decoration:none; border-radius:8px; font-weight:bold; font-size:15px;">Complete Hire Agreement</a>
+        </div>
+        <p style="font-size:13px; color:#64748b;">If the button doesn't work, copy this link into your browser:<br />${h(confirmUrl)}</p>
+        <p>Once we've received your signed agreement, we'll confirm the booking and arrange your invoice for payment.</p>
+        <p>Any questions? Just reply to this email.</p>`,
+    });
+
+    await sendWorkflowEmail(enquiryData, subject, htmlBody, textBody);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to send provisional (repeat hirer) email:', error);
+    return { success: false, error: error.message || 'Failed to send email' };
+  }
+}
+
+/**
+ * Server Action — admin marks "Date/Time Not Available". Tells the hirer the
+ * requested slot can't be accommodated and points them at the live schedule.
+ */
+export async function sendDateNotAvailableEmailAction(enquiryData: any) {
+  try {
+    if (!enquiryData?.emailAddress) {
+      return { success: false, error: 'Enquiry has no email address.' };
+    }
+    const h = (v: unknown) => escapeHtml(v == null ? '' : String(v));
+    const displayDate = formatUKDate(enquiryData.dateRequired) || 'TBC';
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://bishopshullhub.co.uk';
+    const subject = `Bishops Hull Hub — requested date/time not available`;
+
+    const textBody = `Hello ${enquiryData.name},
+
+Thank you for your booking enquiry for the Bishops Hull Hub. Unfortunately, the Hub is not available for the date and time you requested:
+
+${bookingSummaryText(enquiryData)}
+
+You can see current availability on our live schedule at ${baseUrl}/whats-on and submit a new enquiry at ${baseUrl}/hire for any slot that works for you — or simply reply to this email and we'll be happy to help you find an alternative.
+
+Sorry we couldn't accommodate this one.
+
+Bishops Hull Hub`;
+
+    const htmlBody = renderWorkflowEmail({
+      heading: 'Requested Date Not Available',
+      reference: enquiryData.id,
+      bodyHtml: `
+        <p style="margin-top:0;">Hello ${h(enquiryData.name)},</p>
+        <p>Thank you for your booking enquiry for the Bishops Hull Hub. Unfortunately, the Hub is <strong>not available</strong> for the date and time you requested:</p>
+        ${bookingSummaryHtml(enquiryData)}
+        <p>You can see current availability on our <a href="${h(baseUrl)}/whats-on" style="color:#1a4d46;">live schedule</a> and submit a new enquiry via the <a href="${h(baseUrl)}/hire" style="color:#1a4d46;">booking page</a> for any slot that works for you — or simply reply to this email and we'll be happy to help you find an alternative.</p>
+        <p>Sorry we couldn't accommodate this one.</p>`,
+    });
+
+    await sendWorkflowEmail(enquiryData, subject, htmlBody, textBody);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to send date-not-available email:', error);
+    return { success: false, error: error.message || 'Failed to send email' };
   }
 }
 
