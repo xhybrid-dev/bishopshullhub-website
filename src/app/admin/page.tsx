@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { sendSecurityReviewEmailAction, sendHireConfirmationInviteAction, sendDepositReturnEmailAction, sendProvisionalFirstBookingEmailAction, sendProvisionalRepeatHirerEmailAction, sendDateNotAvailableEmailAction } from '@/app/actions/send-email';
 import { bucketForEnquiry, BUCKET_LABELS, type BookingBucket } from '@/lib/booking-buckets';
 import { getLiveCalendarEventsAction, type LiveEvent } from '@/app/actions/get-calendar';
@@ -280,7 +281,8 @@ export default function AdminPortal() {
       }
 
       // First booking: email first, then record — if the email fails nothing
-      // has moved and the button can simply be pressed again.
+      // has been signed off and the box can simply be ticked again. Ticking
+      // does not move the card; requesting the security review does.
       const result = await sendProvisionalFirstBookingEmailAction(enquiry);
       if (!result.success) {
         toast({ variant: 'destructive', title: 'Email Failed', description: result.error || 'Could not send the email. Nothing has been changed — please try again.' });
@@ -292,9 +294,25 @@ export default function AdminPortal() {
         provisionalAt: now,
         viewingCompletedAt: null,
       });
-      toast({ title: 'Provisional Booking Recorded', description: `${enquiry.name} has been emailed — now awaiting a viewing.` });
+      toast({ title: 'Provisional Booking Signed Off', description: `${enquiry.name} has been emailed. Now request the security review to have the viewing arranged.` });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not record the provisional booking.' });
+    }
+  };
+
+  // Unticking the sign-off box — a correction, so no email goes anywhere. Any
+  // viewing request already sent is cleared too, or the card would jump
+  // straight back to Awaiting Viewing the moment the box was re-ticked.
+  const handleClearProvisional = async (enquiry: any) => {
+    try {
+      await updateDoc(doc(firestore, 'booking_enquiries', enquiry.id), {
+        provisionalStatus: null,
+        provisionalAt: null,
+        viewingRequestedAt: null,
+      });
+      toast({ title: 'Sign-Off Cleared', description: 'No email was sent. Tick the box again once the booking is on Hallmaster.' });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not clear the sign-off.' });
     }
   };
 
@@ -358,15 +376,19 @@ export default function AdminPortal() {
         Object.assign(updates, {
           provisionalStatus: null,
           provisionalAt: null,
+          viewingRequestedAt: null,
           viewingCompletedAt: null,
           invoiceSentAt: null,
           ...(agreementSent ? { confirmationStatus: 'NotSent' } : {}),
         });
         break;
       case 'AwaitingViewing':
+        // Both gates have to be set by hand here, since a manual move sends no
+        // email — the toast below is explicit that nobody has been told.
         Object.assign(updates, {
           provisionalStatus: 'FirstBooking',
           provisionalAt: enquiry.provisionalAt || now,
+          viewingRequestedAt: enquiry.viewingRequestedAt || now,
           viewingCompletedAt: null,
           invoiceSentAt: null,
           ...(agreementSent ? { confirmationStatus: 'NotSent' } : {}),
@@ -450,16 +472,28 @@ export default function AdminPortal() {
       return;
     }
 
+    // On a first booking this email is also the request to arrange the viewing,
+    // so it carries the hirer's contact details and it is what advances the
+    // card. Anything else is a plain review that leaves the card where it is.
+    const isFirstBooking = enquiry.provisionalStatus === 'FirstBooking';
+
     try {
       const baseUrl = window.location.origin;
-      const result = await sendSecurityReviewEmailAction(enquiry, securityContacts, baseUrl);
+      const result = await sendSecurityReviewEmailAction(enquiry, securityContacts, baseUrl, isFirstBooking);
       if (result.success) {
-        // Recorded so the card can show "review requested" — previously there
-        // was no way to tell a sent review from an unsent one.
+        const now = new Date().toISOString();
         await updateDoc(doc(firestore, 'booking_enquiries', enquiry.id), {
-          securityReviewRequestedAt: new Date().toISOString(),
+          // Recorded so the card can show "review requested" — previously there
+          // was no way to tell a sent review from an unsent one.
+          securityReviewRequestedAt: now,
+          ...(isFirstBooking ? { viewingRequestedAt: now } : {}),
         });
-        toast({ title: "Review Sent", description: "Security Team has been notified." });
+        toast({
+          title: isFirstBooking ? 'Viewing Requested' : 'Review Sent',
+          description: isFirstBooking
+            ? 'Security Team has been asked to arrange the viewing. Moved to Awaiting Viewing.'
+            : 'Security Team has been notified.',
+        });
       } else {
         toast({ variant: "destructive", title: "Send Failed", description: result.error || "Could not dispatch emails." });
       }
@@ -683,7 +717,7 @@ export default function AdminPortal() {
                         </div>
                         <div className="flex flex-col gap-4 bg-muted/20 p-3 rounded-2xl min-h-[300px] border-2 border-dashed border-muted">
                           {items.map(e => (
-                            <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onMoveBucket={handleMoveBucket} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onProvisionalBooking={handleProvisionalBooking} onNotAvailable={handleNotAvailable} onMarkViewingComplete={handleMarkViewingComplete} onMarkInvoiceSent={handleMarkInvoiceSent} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} />
+                            <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onMoveBucket={handleMoveBucket} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onProvisionalBooking={handleProvisionalBooking} onClearProvisional={handleClearProvisional} onNotAvailable={handleNotAvailable} onMarkViewingComplete={handleMarkViewingComplete} onMarkInvoiceSent={handleMarkInvoiceSent} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} />
                           ))}
                         </div>
                       </div>
@@ -692,7 +726,7 @@ export default function AdminPortal() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {visibleEnquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onMoveBucket={handleMoveBucket} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onProvisionalBooking={handleProvisionalBooking} onNotAvailable={handleNotAvailable} onMarkViewingComplete={handleMarkViewingComplete} onMarkInvoiceSent={handleMarkInvoiceSent} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} isList />)}
+                  {visibleEnquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onMoveBucket={handleMoveBucket} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onProvisionalBooking={handleProvisionalBooking} onClearProvisional={handleClearProvisional} onNotAvailable={handleNotAvailable} onMarkViewingComplete={handleMarkViewingComplete} onMarkInvoiceSent={handleMarkInvoiceSent} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} isList />)}
                 </div>
               )
             ) : (
@@ -953,7 +987,7 @@ export default function AdminPortal() {
   );
 }
 
-function KanbanCard({ enquiry, clashes, onMoveBucket, onSendToSecurity, onSendConfirmation, onProvisionalBooking, onNotAvailable, onMarkViewingComplete, onMarkInvoiceSent, onEdit, onAcknowledgeSecurityComments, isList }: { enquiry: any, clashes?: ClashingEvent[], onMoveBucket: (e: any, target: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onProvisionalBooking: (e: any, kind: 'FirstBooking' | 'RepeatHirer') => Promise<void>, onNotAvailable: (e: any) => Promise<void>, onMarkViewingComplete: (e: any) => Promise<void>, onMarkInvoiceSent: (e: any) => Promise<void>, onEdit: (e: any) => void, onAcknowledgeSecurityComments: (id: string) => void, isList?: boolean }) {
+function KanbanCard({ enquiry, clashes, onMoveBucket, onSendToSecurity, onSendConfirmation, onProvisionalBooking, onClearProvisional, onNotAvailable, onMarkViewingComplete, onMarkInvoiceSent, onEdit, onAcknowledgeSecurityComments, isList }: { enquiry: any, clashes?: ClashingEvent[], onMoveBucket: (e: any, target: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onProvisionalBooking: (e: any, kind: 'FirstBooking' | 'RepeatHirer') => Promise<void>, onClearProvisional: (e: any) => Promise<void>, onNotAvailable: (e: any) => Promise<void>, onMarkViewingComplete: (e: any) => Promise<void>, onMarkInvoiceSent: (e: any) => Promise<void>, onEdit: (e: any) => void, onAcknowledgeSecurityComments: (id: string) => void, isList?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const hasClash = (clashes?.length ?? 0) > 0;
@@ -965,13 +999,18 @@ function KanbanCard({ enquiry, clashes, onMoveBucket, onSendToSecurity, onSendCo
   })();
   const bucket = bucketForEnquiry(enquiry, isPastDate);
 
-  // Wraps an async card action with a busy flag so double-clicks can't fire
-  // an email twice, and stops the click from toggling the card open.
-  const run = (action: string, fn: () => Promise<void> | void) => async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Wraps an async card action with a busy flag so double-clicks can't fire an
+  // email twice. `run` adds the click handling on top for button presses; the
+  // checkbox uses `runAction` directly, since it has no mouse event to stop.
+  const runAction = (action: string, fn: () => Promise<void> | void) => async () => {
     if (busyAction) return;
     setBusyAction(action);
     try { await fn(); } finally { setBusyAction(null); }
+  };
+
+  const run = (action: string, fn: () => Promise<void> | void) => async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await runAction(action, fn)();
   };
 
   const busyIcon = (action: string, Icon: any) =>
@@ -980,6 +1019,12 @@ function KanbanCard({ enquiry, clashes, onMoveBucket, onSendToSecurity, onSendCo
   const confirmationStatus = enquiry.confirmationStatus as ('NotSent' | 'Sent' | 'Submitted' | undefined);
   const reviewComplete = enquiry.status === 'Reviewed';
   const reviewRequested = !!enquiry.securityReviewRequestedAt;
+  // The two gates out of Enquiry Received on a first booking.
+  const provisionalSignedOff = enquiry.provisionalStatus === 'FirstBooking';
+  const needsViewingRequest = provisionalSignedOff && !enquiry.viewingRequestedAt;
+  // Normally hidden once the review is done — but a signed-off booking whose
+  // viewing was never requested still needs the button, or it cannot advance.
+  const showSecurityAction = !reviewComplete || needsViewingRequest;
 
   return (
     <Card className={cn("border shadow-sm hover:shadow-md transition-all bg-white cursor-pointer overflow-hidden", isExpanded && "ring-2 ring-primary", hasClash && "border-red-400 bg-red-50/40", hasPendingSecurityComments && "border-amber-500 ring-2 ring-amber-400 bg-amber-50/40")} onClick={() => setIsExpanded(!isExpanded)}>
@@ -1108,28 +1153,57 @@ function KanbanCard({ enquiry, clashes, onMoveBucket, onSendToSecurity, onSendCo
 
         {bucket === 'EnquiryReceived' && (
           <div className="space-y-1.5 mt-2" onClick={(e) => e.stopPropagation()}>
-            {!reviewComplete && (
+            {/* Step 1 — sign-off. Emails the hirer, but leaves the card here:
+                the booking only advances once the viewing has been requested. */}
+            <label
+              className={cn(
+                "flex items-start gap-2 rounded-md border p-2 transition-colors",
+                provisionalSignedOff ? "border-primary/40 bg-primary/5" : "border-muted bg-muted/30",
+                busyAction ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+              )}
+              title={provisionalSignedOff
+                ? "Untick to undo the sign-off — no email is sent"
+                : "Tick once the booking is on Hallmaster — emails the hirer that a provisional booking is made and a viewing will be arranged"}
+            >
+              <Checkbox
+                className="mt-0.5 h-3.5 w-3.5"
+                checked={provisionalSignedOff}
+                disabled={!!busyAction}
+                onCheckedChange={(checked) => runAction('prov-first', () =>
+                  checked ? onProvisionalBooking(enquiry, 'FirstBooking') : onClearProvisional(enquiry)
+                )()}
+              />
+              <span className="text-[10px] leading-snug flex-1">
+                <span className="font-semibold">Provisional booking made</span>
+                {provisionalSignedOff ? (
+                  <span className="text-muted-foreground"> — signed off {formatUKDate(enquiry.provisionalAt?.substring(0, 10)) || ''}. Hirer emailed.</span>
+                ) : (
+                  <span className="text-muted-foreground"> — tick once it's on Hallmaster. Emails the hirer.</span>
+                )}
+              </span>
+              {busyAction === 'prov-first' && <Loader2 className="h-3 w-3 animate-spin shrink-0 mt-0.5" />}
+            </label>
+            {/* Step 2 — the mover. Notifies the security team and advances. */}
+            {showSecurityAction && (
               <Button
-                variant="secondary"
+                variant={provisionalSignedOff ? "default" : "secondary"}
                 size="sm"
                 className="w-full gap-2 text-[10px] h-8"
                 onClick={run('security', () => onSendToSecurity(enquiry))}
-                disabled={!!busyAction}
+                disabled={!!busyAction || !provisionalSignedOff}
+                title={provisionalSignedOff
+                  ? "Emails the security team the review request and the hirer's details to arrange a viewing — moves this to Awaiting Viewing"
+                  : "Sign off the provisional booking first"}
               >
                 {busyIcon('security', Send)}
-                {reviewRequested ? 'Resend Security Review' : 'Request Security Review'}
+                {reviewRequested ? 'Resend Security Review & Viewing' : 'Request Security Review & Viewing'}
               </Button>
             )}
-            <Button
-              size="sm"
-              className="w-full gap-2 text-[10px] h-8"
-              onClick={run('prov-first', () => onProvisionalBooking(enquiry, 'FirstBooking'))}
-              disabled={!!busyAction}
-              title="Emails the hirer that a provisional booking is made and a viewing will be arranged"
-            >
-              {busyIcon('prov-first', CalendarDays)}
-              Provisional Made — First Booking
-            </Button>
+            {showSecurityAction && !provisionalSignedOff && (
+              <p className="text-[9px] text-muted-foreground text-center leading-tight px-1">
+                Sign off the provisional booking above to request the review and viewing.
+              </p>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -1159,7 +1233,7 @@ function KanbanCard({ enquiry, clashes, onMoveBucket, onSendToSecurity, onSendCo
           <div className="space-y-1.5 mt-2" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-center gap-1.5 text-[10px] font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-md py-1">
               <Eye className="h-3 w-3" />
-              Provisional made {formatUKDate(enquiry.provisionalAt?.substring(0, 10)) || ''} — viewing pending
+              Security team asked {formatUKDate(enquiry.viewingRequestedAt?.substring(0, 10)) || ''} — viewing pending
             </div>
             <Button
               size="sm"

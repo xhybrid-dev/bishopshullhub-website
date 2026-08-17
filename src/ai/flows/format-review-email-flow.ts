@@ -10,6 +10,10 @@ import { formatUKDate } from '@/lib/utils';
 const FormatReviewEmailInputSchema = z.object({
   enquiryData: z.any().describe('The full enquiry data object.'),
   reviewUrl: z.string().describe('The absolute URL for the security team to click and mark as reviewed.'),
+  includeViewingRequest: z
+    .boolean()
+    .optional()
+    .describe('True for first bookings, where the caller appends its own "arrange a viewing" section.'),
 });
 
 const FormatReviewEmailOutputSchema = z.object({
@@ -18,7 +22,11 @@ const FormatReviewEmailOutputSchema = z.object({
   textBody: z.string().describe('A plain text version.'),
 });
 
-export async function formatReviewEmail(input: { enquiryData: any; reviewUrl: string }) {
+export async function formatReviewEmail(input: {
+  enquiryData: any;
+  reviewUrl: string;
+  includeViewingRequest?: boolean;
+}) {
   return formatReviewEmailFlow(input);
 }
 
@@ -50,7 +58,12 @@ const formatReviewEmailFlow = ai.defineFlow(
 
       Ensure the tone is professional, clear, and emphasizes the importance of their review.
 
-      Important: render every date in UK format DD-MM-YYYY (day-month-year). Do not reorder to YYYY-MM-DD or US MM/DD/YYYY style.`,
+      Important: render every date in UK format DD-MM-YYYY (day-month-year). Do not reorder to YYYY-MM-DD or US MM/DD/YYYY style.
+${input.includeViewingRequest ? `
+      Important: do NOT mention arranging or booking a viewing, and do not add any
+      call to action about contacting the hirer. A separate "Please arrange a viewing"
+      section is appended to your output automatically, and repeating it reads as a
+      duplicate. Cover the security review only.` : ''}`,
       output: { schema: FormatReviewEmailOutputSchema },
     });
     return output!;

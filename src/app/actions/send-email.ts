@@ -224,20 +224,73 @@ export async function sendEnquiryEmailAction(enquiryData: any) {
 }
 
 /**
- * Server Action to send review requests to the Security Team.
+ * The security team both reviews the enquiry and arranges the viewing, so for a
+ * first booking the request has to carry the hirer's contact details and an
+ * explicit ask. This block is built here rather than left to the AI flow —
+ * missing it is precisely how a hirer ends up promised a viewing that nobody
+ * was ever asked to arrange.
  */
-export async function sendSecurityReviewEmailAction(enquiryData: any, securityContacts: any[], baseUrl: string) {
+function viewingRequestHtml(enquiryData: any) {
+  const h = (v: unknown) => escapeHtml(v == null ? '' : String(v));
+  // Sits as a sibling of the review card (AI-built or fallback), so it repeats
+  // that card's width and centring to line up beneath it.
+  return `
+    <div style="font-family: Arial, sans-serif; max-width:600px; margin:16px auto 0; background-color:#fefce8; border:1px solid #fde68a; border-radius:12px; padding:20px; color:#1e293b; line-height:1.6;">
+      <h2 style="margin:0 0 8px; font-size:16px; color:#854d0e;">Please arrange a viewing</h2>
+      <p style="margin:0 0 12px; font-size:14px;">
+        This is the hirer's <strong>first booking</strong> with us. They have been told
+        that a member of the hall management team will contact them shortly to arrange a
+        viewing of the Hub. Please get in touch with them directly:
+      </p>
+      <p style="margin:3px 0;"><strong>Name:</strong> ${h(enquiryData.name)}</p>
+      <p style="margin:3px 0;"><strong>Phone:</strong> ${h(enquiryData.phoneNumber || 'Not provided')}</p>
+      <p style="margin:3px 0;"><strong>Email:</strong> ${h(enquiryData.emailAddress || 'Not provided')}</p>
+      <p style="margin:12px 0 0; font-size:13px; color:#854d0e;">
+        Once the viewing has taken place, let the bookings secretary know so the hire
+        agreement can be sent.
+      </p>
+    </div>`;
+}
+
+function viewingRequestText(enquiryData: any) {
+  return `
+PLEASE ARRANGE A VIEWING
+------------------------
+This is the hirer's first booking with us. They have been told that a member of
+the hall management team will contact them shortly to arrange a viewing of the
+Hub. Please get in touch with them directly:
+
+Name:  ${enquiryData.name}
+Phone: ${enquiryData.phoneNumber || 'Not provided'}
+Email: ${enquiryData.emailAddress || 'Not provided'}
+
+Once the viewing has taken place, let the bookings secretary know so the hire
+agreement can be sent.`;
+}
+
+/**
+ * Server Action to send review requests to the Security Team.
+ *
+ * `includeViewingRequest` is set for first bookings, where this email is also
+ * the trigger for the team to arrange the viewing.
+ */
+export async function sendSecurityReviewEmailAction(
+  enquiryData: any,
+  securityContacts: any[],
+  baseUrl: string,
+  includeViewingRequest = false,
+) {
   try {
     if (!securityContacts || securityContacts.length === 0) {
       return { success: false, error: 'No security contacts found. Please add team members in the Security tab.' };
     }
 
     const reviewUrl = `${baseUrl}/review/${enquiryData.id}`;
-    
+
     // Attempt AI formatting
     let formattedEmail;
     try {
-      formattedEmail = await formatReviewEmail({ enquiryData, reviewUrl });
+      formattedEmail = await formatReviewEmail({ enquiryData, reviewUrl, includeViewingRequest });
     } catch (aiError: any) {
       console.error('AI Formatting failed, using fallback:', aiError);
       const displayDate = formatUKDate(enquiryData.dateRequired);
@@ -288,6 +341,16 @@ Requirements: ${enquiryData.additionalRequirements}
 
 Review here: ${reviewUrl}
         `.trim()
+      };
+    }
+
+    // Appended after formatting so the ask survives however the body was built
+    // — the AI flow is told to leave this section to us.
+    if (includeViewingRequest) {
+      formattedEmail = {
+        subject: `Viewing Required & Security Review: ${enquiryData.typeOfEvent} on ${formatUKDate(enquiryData.dateRequired)}`,
+        htmlBody: `${formattedEmail.htmlBody}${viewingRequestHtml(enquiryData)}`,
+        textBody: `${formattedEmail.textBody}\n${viewingRequestText(enquiryData)}`,
       };
     }
 
