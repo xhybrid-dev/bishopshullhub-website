@@ -13,12 +13,21 @@
  *    review does NOT move an enquiry between buckets — it shows as a badge.
  *  - The workflow fields below drive bucket placement.
  *
+ * Leaving Enquiry Received on a first booking takes BOTH of the secretary's
+ * actions, which is why two fields gate it:
+ *  - `provisionalStatus` 'FirstBooking' — the sign-off checkbox: the booking
+ *    exists on Hallmaster and the hirer has been told a viewing is coming.
+ *  - `viewingRequestedAt` — set when the security team is emailed and asked to
+ *    arrange that viewing. Ticking the box alone leaves the card in Enquiry
+ *    Received, so an enquiry can never sit in Awaiting Viewing while the
+ *    people who arrange viewings know nothing about it.
+ *
  * Bucket derivation, in priority order:
  *  - confirmationStatus 'Submitted'  → Hire Confirmed / Invoice Sent
  *    (or Hire Complete once the hire date has passed)
  *  - confirmationStatus 'Sent'       → Awaiting Hire Agreement
  *  - viewingCompletedAt              → Visit Complete
- *  - provisionalStatus 'FirstBooking'→ Awaiting Viewing
+ *  - 'FirstBooking' + viewingRequestedAt → Awaiting Viewing
  *    ('RepeatHirer' never lands here — that action sends the agreement link,
  *    so the enquiry moves straight to Awaiting Hire Agreement)
  *  - otherwise                       → Enquiry Received
@@ -27,6 +36,13 @@
  * "hire confirmed", so it still maps there; 'Reviewed' used to *be* the Visit
  * Complete column, but under the new semantics a reviewed-but-not-booked
  * enquiry belongs in Enquiry Received, so it maps there with its badge.
+ *
+ * Legacy note 2: enquiries moved to Awaiting Viewing before `viewingRequestedAt`
+ * existed have no such field, so they fall back to Enquiry Received with the
+ * sign-off checkbox already ticked. That is deliberate rather than a
+ * regression — those are exactly the bookings whose viewing was never
+ * requested, and one click of Request Security Review sends the missing email
+ * and returns them to Awaiting Viewing.
  */
 
 export type BookingBucket =
@@ -48,7 +64,7 @@ export function bucketForEnquiry(e: any, isPastDate: boolean): BookingBucket | n
   if (submitted) return e.invoiceSentAt ? 'InvoiceSent' : 'HireConfirmed';
   if (e.confirmationStatus === 'Sent') return 'AwaitingAgreement';
   if (e.viewingCompletedAt) return 'VisitComplete';
-  if (e.provisionalStatus === 'FirstBooking') return 'AwaitingViewing';
+  if (e.provisionalStatus === 'FirstBooking' && e.viewingRequestedAt) return 'AwaitingViewing';
   if (e.status === 'Confirmed') return 'HireConfirmed';
   return 'EnquiryReceived';
 }
