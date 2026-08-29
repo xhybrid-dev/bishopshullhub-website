@@ -106,7 +106,7 @@ const HireEnquiryFieldsSchema = z.object({
   dateRequired: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Time must be HH:mm'),
   endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Time must be HH:mm'),
-  typeOfEvent: z.string().min(2),
+  typeOfEvent: z.string(),
   estimatedAttendance: looseInt(1, 110),
   additionalRequirements: z.string().optional(),
   acknowledgedPolicies: looseBoolean(),
