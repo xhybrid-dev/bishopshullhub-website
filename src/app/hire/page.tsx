@@ -48,7 +48,7 @@ const formSchema = z.object({
     (v) => parseInt(v) >= 1 && parseInt(v) <= 110,
     "Attendance must be between 1 and 110 (maximum venue capacity)"
   ),
-  typeOfEvent: z.string().min(2, "Event type is required"),
+  typeOfEvent: z.string(),
   requirements: z.string().optional(),
   agreedToTerms: z.boolean().refine(v => v === true, "You must agree to the terms"),
 }).refine((data) => {
@@ -228,7 +228,7 @@ export default function HirePage() {
     }
     if (step === 2) fieldsToValidate = ['acknowledgedPolicies'];
     if (step === 3) fieldsToValidate = ['name', 'email', 'address', 'postcode', 'phone', 'hiredBefore'];
-    if (step === 4) fieldsToValidate = ['typeOfEvent', 'date', 'startTime', 'endTime', 'attendance'];
+    if (step === 4) fieldsToValidate = ['date', 'startTime', 'endTime', 'attendance'];
 
     const isValid = await form.trigger(fieldsToValidate);
 
