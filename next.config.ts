@@ -48,6 +48,22 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    return [
+      {
+        // Static media in /public is never rewritten by the build, so it gets
+        // no content hash and would otherwise be revalidated on every visit.
+        // Pin it for a year — rename the file if you ever replace the footage.
+        source: '/:path*.(mp4|webm|webp)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
