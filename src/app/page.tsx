@@ -7,6 +7,7 @@ import { CalendarDays, Ticket, Heart, HelpCircle, ArrowRight, ChefHat, Users, Vo
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import HeroSection from '@/components/HeroSection';
 import ReviewsCarousel from '@/components/ReviewsCarousel';
+import DroneTourSection from '@/components/DroneTourSection';
 
 export default function HomePage() {
   const heroImage = PlaceHolderImages.find(img => img.id === 'hero-bg');
@@ -114,6 +115,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Aerial Drone Tour — pairs with the street-level virtual tour above */}
+      <DroneTourSection />
 
       {/* Quick Access Cards - 50/50 Split on Tablets/Mobile */}
       <section className="container mx-auto px-4">
