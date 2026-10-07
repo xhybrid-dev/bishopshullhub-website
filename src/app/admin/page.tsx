@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { signOut } from 'firebase/auth';
 import Link from 'next/link';
 import { cn, formatUKDate, formatUKDateTime } from '@/lib/utils';
-import { ukDateTimeToInstant } from '@/lib/uk-time';
+import { checkAgainstHallmaster, type HallmasterCheck } from '@/lib/hallmaster-match';
 import { paymentDocRef, readLegacyPaymentDetails, type PaymentDetails } from '@/lib/payment-details';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,7 +25,7 @@ import { getLiveCalendarEventsAction, type LiveEvent } from '@/app/actions/get-c
 import type { ClashingEvent } from '@/app/actions/check-availability';
 import { EnquiryCalendarView } from '@/components/admin/EnquiryCalendarView';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { format, startOfToday, parseISO, subDays } from 'date-fns';
+import { format, startOfToday, parseISO, subDays, addMonths } from 'date-fns';
 import { endsByClosing, CLOSING_RULE_TEXT } from '@/lib/venue-hours';
 
 // Bucket columns mirror the bookings secretary's workflow: the amber/blue/green
@@ -223,30 +223,41 @@ export default function AdminPortal() {
     });
   }, [visibleEnquiries]);
 
-  // Build a clash map: { enquiryId: ClashingEvent[] } using the same overlap
-  // rule as check-availability (requestedStart < eventEnd && requestedEnd > eventStart).
-  const clashMap = useMemo(() => {
-    const map: Record<string, ClashingEvent[]> = {};
+  // Check each active enquiry against the live Hallmaster feed. An event that
+  // carries the hirer's name is the booking's own Hallmaster entry, not a
+  // clash; and once the provisional booking is signed off, clash detection
+  // has done its job (see hallmaster-match.ts).
+  const hallmasterChecks = useMemo(() => {
+    const map: Record<string, HallmasterCheck> = {};
     if (liveEvents.length === 0) return map;
+    const today = startOfToday();
+    // The feed only runs 12 months ahead — beyond that "not found" means nothing.
+    const feedHorizon = addMonths(today, 12);
     activeEnquiries.forEach(e => {
-      if (!e.dateRequired || !e.startTime || !e.endTime) return;
-      // Resolve in Europe/London rather than the admin's local zone so the
-      // clash map matches what check-availability decides on the server.
-      const reqStart = ukDateTimeToInstant(e.dateRequired, e.startTime);
-      const reqEnd = ukDateTimeToInstant(e.dateRequired, e.endTime);
-      if (isNaN(reqStart.getTime()) || isNaN(reqEnd.getTime())) return;
-      const clashes: ClashingEvent[] = [];
-      liveEvents.forEach(ev => {
-        const evStart = parseISO(ev.start);
-        const evEnd = parseISO(ev.end);
-        if (reqStart < evEnd && reqEnd > evStart) {
-          clashes.push({ summary: ev.summary, start: ev.start, end: ev.end });
-        }
-      });
-      if (clashes.length > 0) map[e.id] = clashes;
+      let isPast = false;
+      let beyondFeed = false;
+      try {
+        const d = parseISO(e.dateRequired);
+        isPast = d < today;
+        beyondFeed = d > feedHorizon;
+      } catch {}
+      const bucket = bucketForEnquiry(e, isPast);
+      const booked = !!e.provisionalStatus || (bucket !== null && bucket !== 'EnquiryReceived');
+      const check = checkAgainstHallmaster(e, liveEvents, booked);
+      if (!check || (check.state === 'not-found' && beyondFeed)) return;
+      map[e.id] = check;
     });
     return map;
   }, [activeEnquiries, liveEvents]);
+
+  const clashMap = useMemo(() => {
+    const map: Record<string, ClashingEvent[]> = {};
+    Object.entries(hallmasterChecks).forEach(([id, check]) => {
+      const clashes = check.state === 'unbooked' || check.state === 'on-hallmaster' ? check.clashes : [];
+      if (clashes.length > 0) map[id] = clashes;
+    });
+    return map;
+  }, [hallmasterChecks]);
 
   const [editingEnquiry, setEditingEnquiry] = useState<any | null>(null);
 
@@ -693,6 +704,7 @@ export default function AdminPortal() {
                 enquiries={activeEnquiries}
                 liveEvents={liveEvents}
                 clashMap={clashMap}
+                hallmasterChecks={hallmasterChecks}
                 isLiveLoading={isLiveLoading}
                 onEditEnquiry={setEditingEnquiry}
               />
@@ -717,7 +729,7 @@ export default function AdminPortal() {
                         </div>
                         <div className="flex flex-col gap-4 bg-muted/20 p-3 rounded-2xl min-h-[300px] border-2 border-dashed border-muted">
                           {items.map(e => (
-                            <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onMoveBucket={handleMoveBucket} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onProvisionalBooking={handleProvisionalBooking} onClearProvisional={handleClearProvisional} onNotAvailable={handleNotAvailable} onMarkViewingComplete={handleMarkViewingComplete} onMarkInvoiceSent={handleMarkInvoiceSent} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} />
+                            <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} hallmaster={hallmasterChecks[e.id]} onMoveBucket={handleMoveBucket} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onProvisionalBooking={handleProvisionalBooking} onClearProvisional={handleClearProvisional} onNotAvailable={handleNotAvailable} onMarkViewingComplete={handleMarkViewingComplete} onMarkInvoiceSent={handleMarkInvoiceSent} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} />
                           ))}
                         </div>
                       </div>
@@ -726,7 +738,7 @@ export default function AdminPortal() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {visibleEnquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} onMoveBucket={handleMoveBucket} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onProvisionalBooking={handleProvisionalBooking} onClearProvisional={handleClearProvisional} onNotAvailable={handleNotAvailable} onMarkViewingComplete={handleMarkViewingComplete} onMarkInvoiceSent={handleMarkInvoiceSent} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} isList />)}
+                  {visibleEnquiries.map(e => <KanbanCard key={e.id} enquiry={e} clashes={clashMap[e.id]} hallmaster={hallmasterChecks[e.id]} onMoveBucket={handleMoveBucket} onSendToSecurity={handleSendToSecurity} onSendConfirmation={handleSendConfirmation} onProvisionalBooking={handleProvisionalBooking} onClearProvisional={handleClearProvisional} onNotAvailable={handleNotAvailable} onMarkViewingComplete={handleMarkViewingComplete} onMarkInvoiceSent={handleMarkInvoiceSent} onEdit={setEditingEnquiry} onAcknowledgeSecurityComments={handleAcknowledgeSecurityComments} isList />)}
                 </div>
               )
             ) : (
@@ -987,7 +999,54 @@ export default function AdminPortal() {
   );
 }
 
-function KanbanCard({ enquiry, clashes, onMoveBucket, onSendToSecurity, onSendConfirmation, onProvisionalBooking, onClearProvisional, onNotAvailable, onMarkViewingComplete, onMarkInvoiceSent, onEdit, onAcknowledgeSecurityComments, isList }: { enquiry: any, clashes?: ClashingEvent[], onMoveBucket: (e: any, target: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onProvisionalBooking: (e: any, kind: 'FirstBooking' | 'RepeatHirer') => Promise<void>, onClearProvisional: (e: any) => Promise<void>, onNotAvailable: (e: any) => Promise<void>, onMarkViewingComplete: (e: any) => Promise<void>, onMarkInvoiceSent: (e: any) => Promise<void>, onEdit: (e: any) => void, onAcknowledgeSecurityComments: (id: string) => void, isList?: boolean }) {
+// How the enquiry stands against the live Hallmaster feed. Clashes are shown
+// separately in red; this covers the "is it on Hallmaster yet?" side.
+function HallmasterStatus({ check, isExpanded }: { check?: HallmasterCheck; isExpanded: boolean }) {
+  if (!check || check.state === 'unbooked') return null;
+  const timeRange = (ev: { start: string; end: string }) =>
+    `${format(parseISO(ev.start), 'HH:mm')}–${format(parseISO(ev.end), 'HH:mm')}`;
+
+  if (check.state === 'on-hallmaster') {
+    return (
+      <div className="flex items-start gap-1.5 text-[10px] font-bold text-green-800 bg-green-50 border border-green-200 rounded-md px-2 py-1.5">
+        <CheckCircle2 className="h-3 w-3 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p>On Hallmaster</p>
+          {isExpanded && (
+            <p className="font-normal opacity-90 mt-0.5 break-words">• {check.event.summary} ({timeRange(check.event)})</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+  if (check.state === 'likely-on-hallmaster') {
+    return (
+      <div
+        className="flex items-start gap-1.5 text-[10px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5"
+        title="Hallmaster has a booking at this time, but its title doesn't include the hirer's name"
+      >
+        <CalendarDays className="h-3 w-3 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p>Likely on Hallmaster — title doesn't match hirer</p>
+          {isExpanded && check.events.map((ev, i) => (
+            <p key={i} className="font-normal opacity-90 mt-0.5 break-words">• {ev.summary} ({timeRange(ev)})</p>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div
+      className="flex items-start gap-1.5 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5"
+      title="Nothing on the live Hallmaster feed at this date and time — check it has been entered"
+    >
+      <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+      <p>Not found on Hallmaster</p>
+    </div>
+  );
+}
+
+function KanbanCard({ enquiry, clashes, hallmaster, onMoveBucket, onSendToSecurity, onSendConfirmation, onProvisionalBooking, onClearProvisional, onNotAvailable, onMarkViewingComplete, onMarkInvoiceSent, onEdit, onAcknowledgeSecurityComments, isList }: { enquiry: any, clashes?: ClashingEvent[], hallmaster?: HallmasterCheck, onMoveBucket: (e: any, target: string) => void, onSendToSecurity: (e: any) => void, onSendConfirmation: (e: any) => void, onProvisionalBooking: (e: any, kind: 'FirstBooking' | 'RepeatHirer') => Promise<void>, onClearProvisional: (e: any) => Promise<void>, onNotAvailable: (e: any) => Promise<void>, onMarkViewingComplete: (e: any) => Promise<void>, onMarkInvoiceSent: (e: any) => Promise<void>, onEdit: (e: any) => void, onAcknowledgeSecurityComments: (id: string) => void, isList?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const hasClash = (clashes?.length ?? 0) > 0;
@@ -1069,6 +1128,7 @@ function KanbanCard({ enquiry, clashes, onMoveBucket, onSendToSecurity, onSendCo
             </div>
           </div>
         )}
+        <HallmasterStatus check={hallmaster} isExpanded={isExpanded} />
         <div className="flex justify-between items-start">
            <Badge variant="outline" className="text-[10px] font-mono">{enquiry.id.substring(0, 6)}</Badge>
            <DropdownMenu>

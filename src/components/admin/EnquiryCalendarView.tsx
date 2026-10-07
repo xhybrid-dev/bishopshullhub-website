@@ -15,7 +15,7 @@ import {
   addMonths,
   subMonths,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, AlertTriangle, Clock, MapPin, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertTriangle, Clock, MapPin, Info, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { eachEventDay, isMultiDayEvent } from '@/lib/event-days';
 import type { LiveEvent } from '@/app/actions/get-calendar';
 import type { ClashingEvent } from '@/app/actions/check-availability';
+import type { HallmasterCheck } from '@/lib/hallmaster-match';
 
 const STATUS_PILL_COLORS: Record<string, string> = {
   Pending: 'bg-amber-500',
@@ -44,6 +45,7 @@ type Props = {
   enquiries: any[];
   liveEvents: LiveEvent[];
   clashMap: Record<string, ClashingEvent[]>;
+  hallmasterChecks?: Record<string, HallmasterCheck>;
   isLiveLoading: boolean;
   onEditEnquiry: (enquiry: any) => void;
 };
@@ -52,6 +54,7 @@ export function EnquiryCalendarView({
   enquiries,
   liveEvents,
   clashMap,
+  hallmasterChecks = {},
   isLiveLoading,
   onEditEnquiry,
 }: Props) {
@@ -258,6 +261,7 @@ export function EnquiryCalendarView({
                   key={e.id}
                   enquiry={e}
                   clashes={clashes}
+                  onHallmaster={hallmasterChecks[e.id]?.state === 'on-hallmaster'}
                   onEdit={() => onEditEnquiry(e)}
                 />
               );
@@ -323,10 +327,12 @@ function LiveEventPill({ event, day }: { event: LiveEvent; day?: Date }) {
 function EnquirySchedRow({
   enquiry,
   clashes,
+  onHallmaster,
   onEdit,
 }: {
   enquiry: any;
   clashes: ClashingEvent[];
+  onHallmaster?: boolean;
   onEdit: () => void;
 }) {
   const status = (enquiry.status as string) || 'Pending';
@@ -350,6 +356,11 @@ function EnquirySchedRow({
           {hasClash && (
             <Badge className="text-[9px] uppercase tracking-wider bg-red-600 hover:bg-red-600 shrink-0">
               <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Clash
+            </Badge>
+          )}
+          {onHallmaster && (
+            <Badge className="text-[9px] uppercase tracking-wider bg-green-600 hover:bg-green-600 shrink-0">
+              <CheckCircle2 className="h-2.5 w-2.5 mr-1" /> On Hallmaster
             </Badge>
           )}
         </div>
