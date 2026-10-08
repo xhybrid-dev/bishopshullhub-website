@@ -1,5 +1,5 @@
 import type {Metadata} from 'next';
-import { Inter, Permanent_Marker } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -8,15 +8,18 @@ import HireChatbotLoader from '@/components/HireChatbotLoader';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 
-const inter = Inter({
-  subsets: ['latin'],
+// Self-hosted rather than next/font/google: that downloads the fonts during
+// `next build`, and the App Hosting build fails outright when Google Fonts
+// returns anything unexpected. Files are the Google Fonts latin subsets.
+const inter = localFont({
+  src: './fonts/inter-latin-variable.woff2',
   display: 'swap',
   variable: '--font-inter',
-  weight: ['300', '400', '500', '600', '700'],
+  weight: '300 700',
 });
 
-const permanentMarker = Permanent_Marker({
-  subsets: ['latin'],
+const permanentMarker = localFont({
+  src: './fonts/permanent-marker-latin.woff2',
   display: 'swap',
   variable: '--font-permanent-marker',
   weight: '400',
