@@ -64,7 +64,7 @@ env:
 
   # --- Google Places (server-side reviews fetch) ---
   - variable: GOOGLE_PLACES_API_KEY
-    secret: google-place-id
+    secret: google-places-api-key
     availability:
       - RUNTIME
   - variable: GOOGLE_PLACE_ID
