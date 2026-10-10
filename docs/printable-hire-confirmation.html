@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Hire Confirmation Form</title>
+<!--
+  Printable version of the online hire confirmation (src/app/confirm/[id]/page.tsx)
+  for hirers who can't use the online link. Keep the conditions in sync with
+  HIRE_CONDITIONS there. Regenerate the PDF with:
+    node scripts/build-printable-hire-confirmation.mjs
+-->
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --primary: hsl(171 44% 38%);
+    --primary-dark: hsl(171 44% 26%);
+    --ink: hsl(171 45% 10%);
+    --muted: hsl(171 20% 38%);
+    --line: hsl(171 20% 72%);
+    --tint: hsl(171 33% 95%);
+    --amber-bg: #fffbeb;
+    --amber-border: #fcd34d;
+    --amber-ink: #78350f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body {
+    font-family: 'Inter', sans-serif;
+    color: var(--ink);
+    font-size: 8.6pt;
+    line-height: 1.32;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 210mm;
+    height: 297mm;
+    padding: 0 13mm 7mm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    background: var(--primary);
+    color: #fff;
+    margin: 0 -13mm;
+    padding: 5.5mm 13mm 4.5mm;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .eyebrow { font-size: 7.5pt; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .85; }
+  h1 { margin: 1.2mm 0 0; font-size: 19pt; font-weight: 800; letter-spacing: -.01em; }
+  .ref { text-align: right; font-size: 7.5pt; }
+  .ref .box { display: inline-block; margin-top: 1.5mm; width: 38mm; height: 7mm; border: 1px solid rgba(255,255,255,.75); border-radius: 1.5mm; background: rgba(255,255,255,.12); }
+
+  .intro { margin: 3mm 0 0; color: var(--muted); font-size: 8.3pt; }
+  .intro strong { color: var(--ink); }
+
+  section { margin-top: 3.2mm; }
+  h2 {
+    margin: 0 0 2mm;
+    font-size: 7.6pt;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--primary-dark);
+    display: flex; align-items: center; gap: 2mm;
+  }
+  h2 .n {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 4.4mm; height: 4.4mm; border-radius: 50%;
+    background: var(--primary); color: #fff; font-size: 7pt; letter-spacing: 0;
+  }
+
+  .grid { display: grid; gap: 2mm 6mm; }
+  .g2 { grid-template-columns: 1fr 1fr; }
+  .g3 { grid-template-columns: 1.4fr 1fr 1fr; }
+  .full { grid-column: 1 / -1; }
+  .field label { display: block; font-size: 6.8pt; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .field label em { font-style: normal; font-weight: 500; text-transform: none; letter-spacing: 0; }
+  .field .write { height: 6.4mm; border-bottom: 1px solid var(--line); }
+
+  .panel { background: var(--tint); border: 1px solid hsl(171 20% 85%); border-radius: 2.5mm; padding: 2.2mm 4mm 2.6mm; }
+
+  .note { margin: 0 0 2mm; color: var(--muted); font-size: 7.8pt; }
+  ol.conditions { margin: 0; padding-left: 5mm; font-size: 8pt; line-height: 1.3; }
+  ol.conditions li { margin-bottom: .8mm; padding-left: .8mm; }
+  ol.conditions li::marker { color: var(--muted); font-weight: 600; }
+
+  .accept {
+    margin-top: 2.2mm;
+    display: flex; gap: 3mm; align-items: center;
+    background: hsl(171 44% 38% / .07);
+    border: 1px solid hsl(171 44% 38% / .35);
+    border-radius: 2.5mm;
+    padding: 2.4mm 3.5mm;
+    font-size: 8.3pt;
+  }
+  .tick { flex: none; width: 5.5mm; height: 5.5mm; border: 1.4px solid var(--primary-dark); border-radius: 1mm; background: #fff; }
+
+  .digits { display: flex; gap: 1.2mm; margin-top: 1.4mm; align-items: center; }
+  .digits span { width: 6.2mm; height: 7.6mm; border: 1px solid var(--line); border-radius: 1mm; background: #fff; }
+  .digits i { font-style: normal; color: var(--muted); font-weight: 700; }
+
+  .sign { display: grid; grid-template-columns: 1fr 48mm; gap: 6mm; align-items: end; }
+  .sigbox { height: 19mm; border: 1.2px dashed hsl(171 44% 38% / .5); border-radius: 2.5mm; background: #f6f6f6; position: relative; }
+  .sigbox::after { content: 'Sign here'; position: absolute; left: 3mm; bottom: 2mm; font-size: 6.8pt; color: #9aa; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
+
+  .bottom { margin-top: auto; display: grid; grid-template-columns: 1.15fr 1fr; gap: 4mm; }
+  .return { border: 1.4px solid var(--primary); border-radius: 2.5mm; padding: 3mm 4mm; }
+  .return h3, .site h3 { margin: 0 0 1.2mm; font-size: 7.2pt; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  .return h3 { color: var(--primary-dark); }
+  .return p, .site p { margin: 0; font-size: 7.8pt; }
+  .return .em { font-weight: 800; font-size: 9pt; color: var(--primary-dark); margin-top: 1mm; }
+  .site { background: var(--amber-bg); border: 1.4px solid var(--amber-border); border-radius: 2.5mm; padding: 3mm 4mm; color: var(--amber-ink); }
+  .site .phone { font-size: 12pt; font-weight: 800; margin-top: 1mm; }
+  .site .small { font-size: 6.8pt; margin-top: .6mm; }
+
+  footer { margin-top: 2.5mm; text-align: center; font-size: 7pt; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div>
+      <div class="eyebrow">Bishops Hull Hub &middot; Hire Confirmation</div>
+      <h1>Confirm Your Booking</h1>
+    </div>
+    <div class="ref">
+      Booking ref (office use)<br><span class="box"></span>
+    </div>
+  </header>
+
+  <p class="intro">
+    Please complete <strong>every section</strong> in block capitals, sign and date at the bottom, and return the form to us.
+    Your booking is confirmed once we have received this signed form.
+  </p>
+
+  <section>
+    <h2><span class="n">1</span>Your Booking</h2>
+    <div class="panel grid g3">
+      <div class="field"><label>Event</label><div class="write"></div></div>
+      <div class="field"><label>Date</label><div class="write"></div></div>
+      <div class="field"><label>Time <em>(from – to)</em></label><div class="write"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span>Your Details</h2>
+    <div class="grid g2">
+      <div class="field"><label>Your Name</label><div class="write"></div></div>
+      <div class="field"><label>Your Email</label><div class="write"></div></div>
+      <div class="field"><label>Organisation <em>(if applicable)</em></label><div class="write"></div></div>
+      <div class="field"><label>Contact Phone</label><div class="write"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span>Agreement of Conditions of Hire</h2>
+    <p class="note">
+      If you are in any doubt as to the meaning of any of the Conditions, please seek clarification from us before signing.
+      The full conditions of hire are at <strong>bishopshullhub.co.uk/hire-agreement</strong> or available on request.
+    </p>
+    <ol class="conditions">
+      <li>I have read, understood and agree with the terms of the Hire Agreement.</li>
+      <li>I have read, understood and accept the Hub Privacy Statement.</li>
+      <li>I understand the requirements of the Fire Procedure and actions to take in the event of a fire.</li>
+      <li>No cameras or photos to be taken within the venue anytime children or parents are in visible distance from the venue.</li>
+      <li>I have read and understand the health and safety risk assessment including necessary Covid precautions.</li>
+      <li>I understand my requirements to clear and tidy all equipment and leave the facility all in a clean state. The key is to be returned to the lock box and the lock box secured.</li>
+      <li>I understand the booking process, payment terms and cancellation process.</li>
+      <li>I hold the necessary insurances for my activities within The Hub and understand that the Bishops Hull Hub accepts no liability for injury, loss or damage arising from use and hire of the premises to include the outside area, car park and access however caused.</li>
+      <li>I shall bring my own way of contacting any emergency services or emergency contacts as the Hub does not provide any phone or internet services.</li>
+      <li>I am 18 years of age or over and understand that I am responsible for paying all the fees and charges for the hire of the hall. I have read the Conditions of Hall Hire and agree to comply with them. I declare that all information supplied by me is true and correct.</li>
+    </ol>
+    <div class="accept">
+      <span class="tick"></span>
+      <span>I have read, understood and agree to <strong>all</strong> of the conditions above, and the full Hire Agreement.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">4</span>Bank Details <span style="font-weight:600;letter-spacing:.04em;text-transform:none;color:var(--muted)">(for deposit return)</span></h2>
+    <p class="note">Used solely to return your refundable deposit. Please give your <strong>account number</strong>, not a card number.</p>
+    <div class="grid g2">
+      <div class="field"><label>Bank Name</label><div class="write"></div></div>
+      <div class="field"><label>Name on Account</label><div class="write"></div></div>
+      <div class="field">
+        <label>Account Number <em>(8 digits)</em></label>
+        <div class="digits"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+      <div class="field">
+        <label>Sort Code <em>(6 digits)</em></label>
+        <div class="digits"><span></span><span></span><i>–</i><span></span><span></span><i>–</i><span></span><span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">5</span>Signature</h2>
+    <div class="sign">
+      <div class="sigbox"></div>
+      <div class="field"><label>Date</label><div class="write"></div></div>
+    </div>
+  </section>
+
+  <div class="bottom" style="margin-top:3.5mm">
+    <div class="return">
+      <h3>Returning this form</h3>
+      <p>Scan or photograph the completed, signed form and email it to:</p>
+      <p class="em">booking@bishopshullhub.co.uk</p>
+      <p style="margin-top:1mm">or hand it to a member of our booking team.</p>
+    </div>
+    <div class="site">
+      <h3>Site Contact — During Your Hire</h3>
+      <p>For any issues on the day (access, facilities, on-site problems), contact the Duty Manager:</p>
+      <p class="phone">07864 241376</p>
+      <p><strong>operations@bishopshullhub.co.uk</strong></p>
+      <p class="small">Not for new bookings — site enquiries only</p>
+    </div>
+  </div>
+
+  <footer>Bishops Hull Hub &bull; Bishops Hull Playing Field, Bishops Hull Hill, Bishops Hull, Taunton TA1 5EB &bull; booking@bishopshullhub.co.uk</footer>
+</div>
+</body>
+</html>
