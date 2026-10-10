@@ -606,7 +606,12 @@ export default function AdminPortal() {
               <ShieldAlert className="h-12 w-12" />
             </div>
             <CardTitle>Access Restricted</CardTitle>
-            <CardDescription>Login as Admin to access this portal.</CardDescription>
+            <CardDescription>
+              {!user || user.isAnonymous
+                ? "You're not signed in. Sign in with an admin account to access this portal."
+                : `You're signed in as ${user.email ?? 'an account with no email'}, but that account doesn't have admin access. ` +
+                  'Ask an existing admin to add this email to the admin list, or sign in with a different account.'}
+            </CardDescription>
           </CardHeader>
           <CardFooter className="flex flex-col gap-3">
             <Button asChild className="w-full"><Link href="/login">Go to Login</Link></Button>

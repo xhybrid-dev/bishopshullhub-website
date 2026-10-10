@@ -13,7 +13,8 @@
     "test:rules": "firebase emulators:exec --only firestore --project bhh-rules-test \"node tests/firestore-rules.test.mjs\"",
     "test:rate-limit": "tsx tests/chat-rate-limit.test.ts",
     "test:buckets": "tsx tests/booking-buckets.test.ts",
-    "test:hallmaster": "tsx tests/hallmaster-match.test.ts"
+    "test:hallmaster": "tsx tests/hallmaster-match.test.ts",
+    "test:auth-errors": "tsx tests/auth-errors.test.ts"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.42.0",
