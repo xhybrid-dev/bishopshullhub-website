@@ -127,7 +127,8 @@ export default function HomePage() {
               title: "Event Tickets",
               desc: "Book upcoming village events and fundraisers. Event's such as our Fish and Chips Quiz Night",
               icon: Ticket,
-              href: "/whats-on#tickets",
+              href: "https://bishopshullhub.sumupstore.com/",
+              external: true,
               color: "bg-white"
             },
             {
@@ -145,12 +146,23 @@ export default function HomePage() {
               </CardHeader>
               <CardContent className="p-5 md:p-8 pt-0 space-y-4">
                 <p className="text-sm md:text-base text-muted-foreground">{item.desc}</p>
-                <Link 
-                  href={item.href} 
-                  className="inline-flex items-center text-primary font-semibold hover:gap-2 transition-all"
-                >
-                  Find out more <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                {item.external ? (
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center text-primary font-semibold hover:gap-2 transition-all"
+                  >
+                    Book tickets <ArrowRight className="ml-2 h-4 w-4" />
+                  </a>
+                ) : (
+                  <Link 
+                    href={item.href} 
+                    className="inline-flex items-center text-primary font-semibold hover:gap-2 transition-all"
+                  >
+                    Find out more <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                )}
               </CardContent>
             </Card>
           ))}
