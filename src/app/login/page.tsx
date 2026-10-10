@@ -9,12 +9,37 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useFirebase, initiateEmailSignIn } from '@/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { useFirebase } from '@/firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, LogIn, KeyRound, ShieldCheck } from 'lucide-react';
+
+/** Turns a Firebase Auth error code into something an admin can act on. */
+function describeSignInError(code?: string): string {
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return "That email and password don't match. If you haven't signed in on this site before, use the Activate tab.";
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a few minutes and try again.';
+    case 'auth/user-disabled':
+      return 'This account has been disabled. Ask an existing admin for help.';
+    case 'auth/unauthorized-domain':
+      return 'This web address is not authorised for sign-in (auth/unauthorized-domain). It must be added to the Firebase project.';
+    case 'auth/operation-not-allowed':
+      return 'Email/password sign-in is not enabled for this project (auth/operation-not-allowed).';
+    case 'auth/network-request-failed':
+      return 'Could not reach the sign-in service. Check your connection and try again.';
+    case 'auth/api-key-not-valid.-please-pass-a-valid-api-key.':
+    case 'auth/invalid-api-key':
+      return 'The site is not configured with a valid Firebase key (auth/invalid-api-key).';
+    default:
+      return `Sign-in failed${code ? ` (${code})` : ''}. Please try again.`;
+  }
+}
 
 const PRIMARY_ADMIN_EMAIL = 'bishopshullhub@gmail.com';
 
@@ -55,13 +80,16 @@ export default function LoginPage() {
     defaultValues: { email: "", password: "", confirmPassword: "" },
   });
 
+  // Waits for the result so a failed sign-in is reported, rather than leaving
+  // the visitor on this screen with no sign of what went wrong.
   async function onLogin(values: z.infer<typeof loginSchema>) {
     setLoading(true);
     try {
-      initiateEmailSignIn(auth, values.email, values.password);
+      await signInWithEmailAndPassword(auth, values.email.trim().toLowerCase(), values.password);
       toast({ title: "Welcome back", description: "Signing you in..." });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Login Failed", description: "Invalid credentials." });
+    } catch (err: any) {
+      console.error('[login] sign-in failed:', err?.code, err?.message);
+      toast({ variant: "destructive", title: "Login Failed", description: describeSignInError(err?.code) });
     } finally {
       setLoading(false);
     }
