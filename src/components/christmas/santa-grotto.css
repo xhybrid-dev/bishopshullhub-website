@@ -1,0 +1,61 @@
+/* Santa Grotto 2026 — everything is scoped under .grotto so it can't leak into
+   the rest of the site (Tailwind preflight is active globally). */
+.grotto{--red:#c4122f;--deep:#7a0a1e;--green:#0d6b3a;--dgreen:#07391f;--gold:#ffd56b;--snow:#fffaf2;--night:#0b1a3a;
+  position:relative;overflow:hidden;color:var(--snow);line-height:1.5;
+  background:radial-gradient(ellipse at top,#1a2f6b 0,var(--night) 60%,#050b1f 100%)}
+.grotto *{box-sizing:border-box}
+.grotto h1,.grotto h2,.grotto h3{font-family:var(--font-permanent-marker),cursive;margin:0;font-weight:400;text-shadow:0 3px 0 rgba(0,0,0,.3)}
+.grotto a{color:var(--gold)}
+.grotto #snow{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:30}
+.grotto .lights{position:absolute;top:0;left:0;right:0;height:46px;z-index:5;display:flex;justify-content:space-around;pointer-events:none}
+.grotto .lights::before{content:"";position:absolute;top:10px;left:0;right:0;height:3px;background:#06240f}
+.grotto .lights i{position:relative;top:10px;width:14px;height:22px;border-radius:50% 50% 50% 50%/40% 40% 60% 60%;animation:grotto-twinkle 1.6s infinite alternate;box-shadow:0 0 14px 4px currentColor}
+.grotto .lights i:nth-child(4n+1){background:#ff3b4e;color:#ff3b4e}.grotto .lights i:nth-child(4n+2){background:#ffd56b;color:#ffd56b;animation-delay:.4s}
+.grotto .lights i:nth-child(4n+3){background:#3dff8c;color:#3dff8c;animation-delay:.8s}.grotto .lights i:nth-child(4n){background:#4db8ff;color:#4db8ff;animation-delay:1.2s}
+@keyframes grotto-twinkle{from{opacity:.35;transform:scale(.9)}to{opacity:1;transform:scale(1.05)}}
+.grotto .sleigh{position:absolute;top:70px;left:-300px;font-size:3rem;white-space:nowrap;z-index:4;animation:grotto-fly 22s linear infinite;pointer-events:none;filter:drop-shadow(0 0 12px #ffd56b)}
+@keyframes grotto-fly{0%{transform:translate(0,0) rotate(-4deg)}50%{transform:translate(60vw,40px) rotate(3deg)}100%{transform:translate(115vw,-10px) rotate(-4deg)}}
+.grotto .hero{text-align:center;padding:90px 16px 40px;position:relative}
+.grotto .stars{font-size:1.4rem;letter-spacing:.5rem;animation:grotto-twinkle 2s infinite alternate}
+.grotto h1{font-size:clamp(3rem,11vw,7rem);line-height:1.1;background:linear-gradient(180deg,#fff,#ffd56b 55%,#ff5a6e);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 0 #5a0714);margin:10px 0}
+.grotto .sub{font-size:clamp(1.1rem,3.5vw,1.6rem);color:var(--gold)}
+.grotto .santa{font-size:clamp(5rem,20vw,10rem);display:inline-block;animation:grotto-bob 2.4s ease-in-out infinite;filter:drop-shadow(0 8px 20px #000a)}
+@keyframes grotto-bob{50%{transform:translateY(-14px) rotate(3deg)}}
+.grotto .badge{display:inline-block;margin:14px 6px 0;padding:10px 20px;border-radius:999px;background:var(--red);border:3px dashed var(--gold);font-weight:600;box-shadow:0 0 24px #ff3b4e88}
+.grotto .countdown{display:flex;gap:12px;justify-content:center;margin:26px 0 8px;flex-wrap:wrap;min-height:84px}
+.grotto .countdown div{background:linear-gradient(#fff,#ffe9d0);color:var(--deep);min-width:78px;padding:10px 6px;border-radius:14px;border-bottom:5px solid var(--red);box-shadow:0 6px 0 #0004}
+.grotto .countdown b{display:block;font-size:2rem;font-family:var(--font-permanent-marker),cursive;font-weight:400}
+.grotto .countdown span{font-size:.8rem;text-transform:uppercase;letter-spacing:.1em}
+.grotto .content{max-width:980px;margin:0 auto;padding:0 16px 60px}
+.grotto .candy{height:22px;border-radius:12px;background:repeating-linear-gradient(-45deg,var(--red) 0 16px,#fff 16px 32px);margin:30px 0;animation:grotto-slide 3s linear infinite;background-size:45px 45px;box-shadow:0 0 18px #ff3b4e88}
+@keyframes grotto-slide{to{background-position:45px 0}}
+.grotto .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.grotto .card{background:linear-gradient(160deg,var(--green),var(--dgreen));border:3px solid var(--gold);border-radius:22px;padding:20px;text-align:center;box-shadow:0 10px 0 #0005;transition:transform .2s;color:var(--snow)}
+.grotto .card:hover{transform:translateY(-6px) rotate(-1deg)}.grotto .card .e{font-size:2.6rem}.grotto .card h3{color:var(--gold);font-size:1.6rem}.grotto .card p{margin:.3rem 0 0}
+.grotto .panel{background:linear-gradient(180deg,#fffaf2,#ffe9d0);color:#3a0710;border-radius:28px;padding:clamp(18px,4vw,36px);border:6px solid var(--red);box-shadow:0 0 0 4px var(--gold),0 20px 60px #000a;position:relative;margin-top:40px}
+.grotto .panel::before{content:"🎄";position:absolute;top:-34px;left:50%;transform:translateX(-50%);font-size:3rem}
+.grotto .panel h2{color:var(--red);text-align:center;font-size:clamp(1.8rem,6vw,2.8rem);text-shadow:none;margin-top:14px}
+.grotto .panel h3{color:var(--green);text-shadow:none;font-size:1.5rem;margin:22px 0 8px}
+.grotto label{display:block;font-weight:600;font-size:.95rem;margin-bottom:4px}
+.grotto input,.grotto select{width:100%;padding:12px 14px;font:inherit;border:2px solid #e2b9a8;border-radius:12px;background:#fff;color:#3a0710}
+.grotto input:focus,.grotto select:focus{outline:3px solid var(--gold);border-color:var(--red)}
+.grotto .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.grotto .child{background:#fff;border:3px dashed var(--green);border-radius:18px;padding:14px;margin:12px 0;position:relative}
+.grotto .child h4{margin:0 0 8px;color:var(--red);font-size:1.15rem;font-weight:600}
+.grotto .child .row{grid-template-columns:2fr 1fr 1.4fr}
+@media(max-width:560px){.grotto .child .row{grid-template-columns:1fr}}
+.grotto .remove{position:absolute;top:8px;right:10px;border:0;background:none;font-size:1.3rem;cursor:pointer}
+.grotto button.add{width:100%;padding:12px;border-radius:14px;border:3px dashed var(--green);background:#eaffef;color:var(--green);font:inherit;font-weight:600;cursor:pointer}
+.grotto button.add:hover{background:#d4ffe0}
+.grotto .total{display:flex;justify-content:space-between;align-items:center;font-size:1.3rem;font-weight:600;margin:20px 0 10px;padding:14px 18px;border-radius:14px;background:#fff;border:3px solid var(--gold)}
+.grotto button.go{width:100%;font-family:var(--font-permanent-marker),cursive;font-size:1.7rem;padding:16px;border:0;border-radius:18px;color:#fff;cursor:pointer;background:linear-gradient(var(--red),var(--deep));box-shadow:0 7px 0 #4a0511,0 0 30px #ff3b4e88;animation:grotto-pulse 1.8s infinite}
+.grotto button.go:active{transform:translateY(5px);box-shadow:0 2px 0 #4a0511}.grotto button.go:disabled{opacity:.6;animation:none;cursor:wait}
+@keyframes grotto-pulse{50%{transform:scale(1.025)}}
+.grotto .err{color:#b00020;font-weight:600;text-align:center;min-height:1.5em;margin-top:10px}
+.grotto .note{font-size:.9rem;text-align:center;opacity:.8;margin-top:10px}
+.grotto .grotto-foot{text-align:center;padding:10px 16px 50px;color:var(--gold)}
+.grotto .elves{font-size:2rem;letter-spacing:.4rem}
+.grotto-thanks{min-height:70vh;display:grid;place-content:center;justify-items:center;text-align:center;padding:40px 20px}
+.grotto-thanks .big{font-size:6rem}
+.grotto-thanks h1{font-size:clamp(2.2rem,8vw,4.5rem)}
+@media(prefers-reduced-motion:reduce){.grotto *{animation:none!important}.grotto #snow,.grotto .sleigh{display:none}}
