@@ -9,7 +9,6 @@ import {
 } from '@/lib/santa-grotto';
 import { Bell, CalendarDays, Clock, Cookie, Gift, Lock, Milk, Palette, Plus, Snowflake, Sparkles, Star, Ticket, TreePine, UserRound, X, Coffee } from 'lucide-react';
 import SantaPeek from './SantaPeek';
-import Sleigh from './Sleigh';
 import HubBanner from './HubBanner';
 import './santa-grotto.css';
 
@@ -146,7 +145,6 @@ export default function SantaGrotto() {
       <div className="lights" aria-hidden="true">
         {Array.from({ length: bulbs }, (_, i) => <i key={i} />)}
       </div>
-      <div className="sleigh" aria-hidden="true"><Sleigh /></div>
 
       <header className="hero">
         <div className="stars" aria-hidden="true">

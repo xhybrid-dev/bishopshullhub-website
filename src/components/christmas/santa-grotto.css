@@ -13,8 +13,6 @@
 .grotto .lights i:nth-child(4n+1){background:#ff3b4e;color:#ff3b4e}.grotto .lights i:nth-child(4n+2){background:#ffd56b;color:#ffd56b;animation-delay:.4s}
 .grotto .lights i:nth-child(4n+3){background:#3dff8c;color:#3dff8c;animation-delay:.8s}.grotto .lights i:nth-child(4n){background:#4db8ff;color:#4db8ff;animation-delay:1.2s}
 @keyframes grotto-twinkle{from{opacity:.35;transform:scale(.9)}to{opacity:1;transform:scale(1.05)}}
-.grotto .sleigh{position:absolute;top:70px;left:-340px;white-space:nowrap;z-index:4;animation:grotto-fly 22s linear infinite;pointer-events:none;filter:drop-shadow(0 0 12px #ffd56b)}
-@keyframes grotto-fly{0%{transform:translate(0,0) rotate(-4deg)}50%{transform:translate(60vw,40px) rotate(3deg)}100%{transform:translate(115vw,-10px) rotate(-4deg)}}
 .grotto .hero{text-align:center;padding:90px 16px 40px;position:relative}
 .grotto .stars{font-size:1.4rem;letter-spacing:.5rem;animation:grotto-twinkle 2s infinite alternate}
 .grotto h1{font-size:clamp(3rem,11vw,7rem);line-height:1.1;background:linear-gradient(180deg,#fff,#ffd56b 55%,#ff5a6e);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 0 #5a0714);margin:10px 0}
@@ -75,7 +73,7 @@
 .grotto-thanks{min-height:70vh;display:grid;place-content:center;justify-items:center;text-align:center;padding:40px 20px}
 .grotto-thanks .big{font-size:6rem}
 .grotto-thanks h1{font-size:clamp(2.2rem,8vw,4.5rem)}
-@media(prefers-reduced-motion:reduce){.grotto *{animation:none!important}.grotto #snow,.grotto .sleigh{display:none}}
+@media(prefers-reduced-motion:reduce){.grotto *{animation:none!important}.grotto #snow{display:none}}
 /* Desktop: the booking form was stretched across the full 980px column, which
    made every field huge. Keep it a compact, centred card. */
 @media(min-width:900px){
@@ -120,15 +118,6 @@
 .grotto .elves svg:nth-child(2n){animation-delay:.5s}.grotto .elves svg:nth-child(3n){animation-delay:1s}
 @keyframes grotto-float{50%{transform:translateY(-6px)}}
 
-/* ---- Sleigh silhouette ---- */
-.grotto .sleigh-svg{width:clamp(200px,26vw,320px);height:auto;fill:#ffd56b;display:block}
-.grotto .sleigh-svg .antler,.grotto .sleigh-svg .rein,.grotto .sleigh-svg .runner{fill:none;stroke:#ffd56b;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
-.grotto .sleigh-svg .rein{stroke-width:1;opacity:.7}
-.grotto .sleigh-svg .pom{fill:#fff}
-.grotto .sleigh-svg .sleigh-body{animation:grotto-gallop .9s ease-in-out infinite alternate}
-.grotto .sleigh-svg .trail circle{fill:#fff;animation:grotto-twinkle .8s infinite alternate}
-.grotto .sleigh-svg .trail circle:nth-child(2n){animation-delay:.4s}
-@keyframes grotto-gallop{to{transform:translateY(-5px)}}
 
 /* ---- Hub photo banner ---- */
 .grotto .hub-banner{max-width:1040px;margin:50px auto 30px;padding:0 16px;position:relative}
