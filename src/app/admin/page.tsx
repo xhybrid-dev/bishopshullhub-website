@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, LayoutDashboard, LogOut, Inbox, Mail, Calendar, CalendarDays, ShieldAlert, FileText, CheckCircle2, MoreVertical, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, Trash2, Send, AlertTriangle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle, RefreshCw, MessageSquare, Eye, Receipt, XCircle } from 'lucide-react';
+import { Loader2, LayoutDashboard, LogOut, Inbox, Mail, Calendar, CalendarDays, ShieldAlert, FileText, CheckCircle2, MoreVertical, Clock3, LayoutGrid, List, MapPin, Users, ChevronDown, ChevronUp, ShieldCheck, Trash2, Send, AlertTriangle, Info, HelpCircle, Plus, Pencil, Save, FileSignature, Banknote, MinusCircle, RefreshCw, TreePine, MessageSquare, Eye, Receipt, XCircle } from 'lucide-react';
 import { useFirebase, useCollection, useMemoFirebase, useDoc, setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, orderBy, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +24,7 @@ import { bucketForEnquiry, BUCKET_LABELS, type BookingBucket } from '@/lib/booki
 import { getLiveCalendarEventsAction, type LiveEvent } from '@/app/actions/get-calendar';
 import type { ClashingEvent } from '@/app/actions/check-availability';
 import { EnquiryCalendarView } from '@/components/admin/EnquiryCalendarView';
+import { GrottoRegister } from '@/components/admin/GrottoRegister';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format, startOfToday, parseISO, subDays, addMonths } from 'date-fns';
 import { endsByClosing, CLOSING_RULE_TEXT } from '@/lib/venue-hours';
@@ -676,6 +677,12 @@ export default function AdminPortal() {
               >
                 <HelpCircle className="h-3.5 w-3.5" /> FAQs
               </TabsTrigger>
+              <TabsTrigger
+                value="xmas2026"
+                className="rounded-xl h-9 px-3.5 text-xs font-medium gap-1.5 bg-white border shadow-sm hover:border-primary/30 transition-all data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:border-primary"
+              >
+                <TreePine className="h-3.5 w-3.5" /> Xmas 2026
+              </TabsTrigger>
             </div>
           </TabsList>
 
@@ -991,6 +998,10 @@ export default function AdminPortal() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="xmas2026" className="animate-in fade-in">
+            <GrottoRegister enabled={hasAdminAccess && activeTab === 'xmas2026'} />
           </TabsContent>
         </Tabs>
       </div>

@@ -137,6 +137,16 @@ service cloud.firestore {
       allow list, create, update, delete: if isAdmin();
     }
 
+    // Santa Grotto register. Rows are created only by the Stripe webhook (Admin
+    // SDK, which bypasses these rules), so clients can never create or delete
+    // them. Admins read the register and tick children off as arrived.
+    match /grotto_bookings/{bookingId} {
+      allow get, list: if isAdmin();
+      allow update: if isExistingAdmin();
+      allow create, delete: if false;
+    }
+    // grotto_holds and grotto_meta are server-only: no rule = no client access.
+
     match /admins/{adminId} {
       // Same Activate-flow allowance: anyone can probe a single doc by email,
       // but only existing admins can list or modify the collection.

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { SoldOutError, releaseHold, reservePlaces } from '@/lib/grotto-bookings';
 import {
   GROTTO_EVENT_LABEL,
   GROTTO_TICKET_PRICE_PENCE,
@@ -40,6 +41,15 @@ export async function POST(req: NextRequest) {
   const v = validateGrottoBooking(body);
   if ('error' in v) return NextResponse.json({ error: v.error }, { status: 400 });
 
+  let hold: Awaited<ReturnType<typeof reservePlaces>>;
+  try {
+    hold = await reservePlaces(v.children.length);
+  } catch (e) {
+    if (e instanceof SoldOutError) return NextResponse.json({ error: e.message, remaining: e.remaining }, { status: 409 });
+    console.error('Could not reserve places', e);
+    return NextResponse.json({ error: 'Could not check availability. Please try again.' }, { status: 500 });
+  }
+
   const siteUrl = (process.env.NEXT_PUBLIC_BASE_URL || req.nextUrl.origin).replace(/\/$/, '');
   const childMeta = v.children.map((c, i) => [`child_${i + 1}`, `${c.name} | age ${c.age} | ${c.gender}`] as const);
 
@@ -56,6 +66,9 @@ export async function POST(req: NextRequest) {
     'line_items[0][price_data][product_data][description]',
     'Saturday 12th December 2026, 10am-12pm. Arrive before 11am to see Santa. One ticket per child.',
   );
+  p.set('expires_at', String(hold.expiresAtSeconds));
+  p.set('metadata[hold_id]', hold.holdId);
+  p.set('payment_intent_data[metadata][hold_id]', hold.holdId);
   for (const prefix of ['metadata', 'payment_intent_data[metadata]']) {
     p.set(`${prefix}[event]`, GROTTO_EVENT_LABEL);
     p.set(`${prefix}[parent_name]`, v.parent.name);
@@ -72,11 +85,13 @@ export async function POST(req: NextRequest) {
     const data = await r.json();
     if (!r.ok) {
       console.error('Stripe error', data.error);
+      await releaseHold(hold.holdId);
       return NextResponse.json({ error: 'Could not start payment. Please try again.' }, { status: 502 });
     }
     return NextResponse.json({ url: data.url });
   } catch (e) {
     console.error(e);
+    await releaseHold(hold.holdId);
     return NextResponse.json({ error: 'Could not reach the payment provider.' }, { status: 502 });
   }
 }

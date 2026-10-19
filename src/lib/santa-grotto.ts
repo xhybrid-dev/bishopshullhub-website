@@ -38,3 +38,39 @@ export function validateGrottoBooking(b: any): { error: string } | GrottoBooking
   }
   return { parent, children };
 }
+
+/** Total children the grotto can take. Enforced when a checkout is started. */
+export const GROTTO_CAPACITY = 80;
+/** Stripe's minimum Checkout Session lifetime. Places are held for this long. */
+export const GROTTO_HOLD_MINUTES = 30;
+
+export interface GrottoChild {
+  name: string;
+  age: number | null;
+  gender: string;
+}
+
+/**
+ * Parses the "Name | age 5 | Girl" strings written to Stripe metadata. Reads
+ * from the right so a name that happens to contain " | " still survives.
+ */
+export function parseChildMeta(value: string): GrottoChild {
+  const parts = String(value).split(' | ');
+  if (parts.length < 3) return { name: String(value).trim(), age: null, gender: '' };
+  const gender = parts[parts.length - 1].trim();
+  const ageMatch = parts[parts.length - 2].match(/(\d+)/);
+  return {
+    name: parts.slice(0, -2).join(' | ').trim(),
+    age: ageMatch ? parseInt(ageMatch[1], 10) : null,
+    gender,
+  };
+}
+
+/** child_1 … child_n from Stripe metadata, in booking order. */
+export function childrenFromMetadata(meta: Record<string, string> | null | undefined): GrottoChild[] {
+  return Object.keys(meta ?? {})
+    .map((k) => k.match(/^child_(\d+)$/))
+    .filter((m): m is RegExpMatchArray => !!m)
+    .sort((a, b) => Number(a[1]) - Number(b[1]))
+    .map((m) => parseChildMeta(meta![m[0]]));
+}

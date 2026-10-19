@@ -98,8 +98,18 @@ export default function SantaGrotto() {
   const [nextId, setNextId] = useState(2);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
 
   useEffect(() => { setBulbs(Math.ceil(innerWidth / 38)); }, []);
+
+  useEffect(() => {
+    fetch('/api/christmas2026/availability')
+      .then((r) => r.json())
+      .then((j) => typeof j.remaining === 'number' && setRemaining(j.remaining))
+      .catch(() => {});
+  }, []);
+  const maxKids = Math.min(GROTTO_MAX_CHILDREN, remaining ?? GROTTO_MAX_CHILDREN);
+  const soldOut = remaining === 0;
 
   // Fade-and-rise sections into view as they're scrolled to.
   useEffect(() => {
@@ -183,6 +193,14 @@ export default function SantaGrotto() {
           <p style={{ textAlign: 'center' }}>
             One ticket per child. Fill in the details and we’ll send you to Stripe to pay safely.
           </p>
+          {remaining !== null && remaining > 0 && remaining <= 20 && (
+            <p className="note" style={{ fontWeight: 600 }}>Only {remaining} place{remaining === 1 ? '' : 's'} left.</p>
+          )}
+          {soldOut ? (
+            <p className="err" style={{ fontSize: '1.2rem', margin: '24px 0' }}>
+              Sorry, the Santa Grotto is fully booked. Please check back in case places are released.
+            </p>
+          ) : (
           <form onSubmit={submit} noValidate>
             <h3><UserRound aria-hidden="true" /> Grown-up details</h3>
             <div className="row">
@@ -233,7 +251,7 @@ export default function SantaGrotto() {
                 </div>
               </div>
             ))}
-            {kids.length < GROTTO_MAX_CHILDREN && (
+            {kids.length < maxKids && (
               <button type="button" className="add"
                 onClick={() => { setKids((ks) => [...ks, newChild(nextId)]); setNextId(nextId + 1); }}>
                 <Plus aria-hidden="true" /> Add another child
@@ -250,6 +268,7 @@ export default function SantaGrotto() {
             <div className="err" role="alert">{error}</div>
             <p className="note">Secure payment by Stripe. Arrive before 11am so Santa can see everyone.</p>
           </form>
+          )}
         </section>
       </div>
 
