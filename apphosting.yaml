@@ -65,17 +65,17 @@ env:
   # --- Santa Grotto payments (see docs/christmas-2026.md) ---
   # Uncomment ONLY after both secrets exist in Secret Manager, otherwise the
   # rollout fails:
-  #   firebase apphosting:secrets:set stripe-secret-key
-  #   firebase apphosting:secrets:set stripe-webhook-secret
-  #   firebase apphosting:secrets:grantaccess <secret> --backend <backend-id>
-  # - variable: STRIPE_SECRET_KEY
-  #   secret: stripe-secret-key
-  #   availability:
-  #     - RUNTIME
-  # - variable: STRIPE_WEBHOOK_SECRET
-  #   secret: stripe-webhook-secret
-  #   availability:
-  #     - RUNTIME
+     firebase apphosting:secrets:set stripe-secret-key
+     firebase apphosting:secrets:set stripe-webhook-secret
+     firebase apphosting:secrets:grantaccess <secret> --backend <backend-id>
+   - variable: STRIPE_SECRET_KEY
+    secret: stripe-secret-key
+     availability:
+       - RUNTIME
+   - variable: STRIPE_WEBHOOK_SECRET
+     secret: stripe-webhook-secret
+     availability:
+       - RUNTIME
 
   # --- Google Places (server-side reviews fetch) ---
   - variable: GOOGLE_PLACES_API_KEY
