@@ -14,7 +14,9 @@
     "test:rate-limit": "tsx tests/chat-rate-limit.test.ts",
     "test:buckets": "tsx tests/booking-buckets.test.ts",
     "test:hallmaster": "tsx tests/hallmaster-match.test.ts",
-    "test:auth-errors": "tsx tests/auth-errors.test.ts"
+    "test:auth-errors": "tsx tests/auth-errors.test.ts",
+    "test:grotto": "tsx tests/grotto.test.ts",
+    "test:grotto-emulator": "firebase emulators:exec --only firestore --project bhh-grotto-test \"tsx tests/grotto-bookings.emulator.test.ts\""
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.42.0",
@@ -48,6 +50,7 @@
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
     "firebase": "^11.9.1",
+    "firebase-admin": "^14.5.0",
     "framer-motion": "^12.38.0",
     "genkit": "^1.42.0",
     "lucide-react": "^0.475.0",

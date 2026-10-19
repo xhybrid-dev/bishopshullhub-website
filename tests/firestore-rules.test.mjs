@@ -12,7 +12,7 @@ import {
   assertSucceeds,
   assertFails,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 
 const ENQ = 'abc12345';
@@ -115,6 +115,29 @@ await t('public cannot seed payment on an enquiry with no invite sent', () =>
 // --- enquiry doc itself is still publicly gettable (confirm/review links) ---
 await t('enquiry doc remains publicly gettable', () =>
   assertSucceeds(getDoc(enquiryPath(attacker))));
+
+// --- Santa Grotto register: server writes only, admins read and tick arrivals ---
+const GB = { parentName: 'Pat', parentEmail: 'p@x.co', parentPhone: '1', childCount: 1, children: [{ name: 'Amy', age: 4, gender: 'Girl', arrived: false }] };
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'grotto_bookings', 'cs_test_1'), GB);
+  await setDoc(doc(ctx.firestore(), 'grotto_holds', 'h1'), { children: 2 });
+  await setDoc(doc(ctx.firestore(), 'grotto_meta', 'stats'), { childrenSold: 1 });
+});
+const gb = (db) => doc(db, 'grotto_bookings', 'cs_test_1');
+await t('grotto: admin can read the register', () => assertSucceeds(getDoc(gb(admin))));
+await t('grotto: public cannot read the register', () => assertFails(getDoc(gb(guest))));
+await t('grotto: signed-in non-admin cannot read the register', () => assertFails(getDoc(gb(attacker))));
+await t('grotto: admin can tick a child as arrived', () =>
+  assertSucceeds(updateDoc(gb(admin), { children: [{ ...GB.children[0], arrived: true }] })));
+await t('grotto: public cannot edit a booking', () => assertFails(updateDoc(gb(attacker), { parentName: 'x' })));
+await t('grotto: nobody can create bookings from a client', () => assertFails(setDoc(doc(admin, 'grotto_bookings', 'cs_fake'), GB)));
+await t('grotto: nobody can delete bookings from a client', () => assertFails(deleteDoc(gb(admin))));
+await t('grotto: holds and stats are not client-readable', async () => {
+  await assertFails(getDoc(doc(admin, 'grotto_holds', 'h1')));
+  await assertFails(getDoc(doc(admin, 'grotto_meta', 'stats')));
+});
+await t('grotto: public cannot fake a sold-out/open counter', () =>
+  assertFails(setDoc(doc(attacker, 'grotto_meta', 'stats'), { childrenSold: 0 })));
 
 await env.cleanup();
 
