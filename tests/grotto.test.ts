@@ -6,6 +6,7 @@ import { createHmac } from 'crypto';
 import { verifyStripeSignature } from '../src/lib/stripe-signature';
 import { parseChildMeta, childrenFromMetadata } from '../src/lib/santa-grotto';
 import { buildRegisterRows, registerToCsv } from '../src/lib/grotto-register';
+import { buildGrottoConfirmationEmail } from '../src/lib/grotto-email';
 
 const results: Array<[boolean, string, string]> = [];
 const check = (name: string, cond: unknown, detail = '') => results.push([!!cond, name, detail]);
@@ -38,6 +39,15 @@ check('youngest first, ties by name, unknown last', rows.map((r) => r.name).join
 const csv = registerToCsv(buildRegisterRows([{ id: 'sess_x', children: [{ name: '=HYPERLINK("evil")', age: 4, gender: 'Boy' }] }]));
 check('CSV neutralises formulas', csv.includes(`"'=HYPERLINK(""evil"")"`), csv);
 check('CSV has a UTF-8 BOM and header', csv.startsWith('﻿"Age","Child name"'));
+
+// --- parent confirmation email
+const em = buildGrottoConfirmationEmail({ parentName: 'Jo <script>x</script> Bloggs', children: [{ name: '<img src=x onerror=1>', age: 5 }, { name: 'Max', age: null }], amountPence: 1000, ref: 'AB12CD34' });
+check('email tells parents to arrive for 10am', em.html.includes('10 o’clock') && em.text.includes('PLEASE ARRIVE FOR 10AM'));
+check('email asks for requirements by replying', em.html.includes('simply reply to this email') && em.text.includes('simply reply to this email'));
+check('email lists the children and ref', em.html.includes('Max') && em.html.includes('AB12CD34') && em.text.includes('AB12CD34'));
+check('email escapes names (no HTML injection)', !em.html.includes('<img src=x') && !em.html.includes('<script>x') && em.html.includes('&lt;img'));
+check('email mailto goes to the trustees inbox', em.html.includes('mailto:trustees@bishopshullhub.co.uk?subject='));
+check('single ticket wording', buildGrottoConfirmationEmail({ parentName: 'A', children: [{ name: 'K', age: 4 }], amountPence: 500, ref: 'X' }).text.includes('Your 1 ticket for'));
 
 let failed = 0;
 for (const [ok, name, detail] of results) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : `  ${detail}`}`); }

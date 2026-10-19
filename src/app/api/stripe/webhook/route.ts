@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { verifyStripeSignature } from '@/lib/stripe-signature';
 import { recordPaidBooking, releaseHold, type StripeCheckoutSession } from '@/lib/grotto-bookings';
-import { GROTTO_CAPACITY } from '@/lib/santa-grotto';
+import { GROTTO_CAPACITY, GROTTO_CONTACT_EMAIL } from '@/lib/santa-grotto';
+import { buildGrottoConfirmationEmail } from '@/lib/grotto-email';
 
 const resend = new Resend(process.env.RESEND_API_KEY || 're_your_api_key_here');
 const ADMIN_EMAIL = 'booking@bishopshullhub.co.uk';
@@ -29,6 +30,27 @@ async function notifyAdmin(rec: Awaited<ReturnType<typeof recordPaidBooking>>) {
   });
 }
 
+async function sendParentConfirmation(rec: Awaited<ReturnType<typeof recordPaidBooking>>) {
+  const b = rec.booking;
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.parentEmail)) return;
+  const email = buildGrottoConfirmationEmail({
+    parentName: b.parentName,
+    children: b.children,
+    amountPence: b.amountPence,
+    ref: rec.sessionId.slice(-8).toUpperCase(),
+  });
+  if (!process.env.RESEND_API_KEY) { console.log(`[grotto] (parent email simulated) to ${b.parentEmail}: ${email.subject}`); return; }
+  const res = await resend.emails.send({
+    from: 'Santa’s Grotto at Bishops Hull Hub <noreply@bishopshullhub.co.uk>',
+    to: b.parentEmail,
+    replyTo: GROTTO_CONTACT_EMAIL, // requirements and questions go to the trustees inbox
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
+  });
+  if (res.error) throw new Error(res.error.message);
+}
+
 export async function POST(req: NextRequest) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) return NextResponse.json({ error: 'Webhook not configured.' }, { status: 500 });
@@ -51,7 +73,13 @@ export async function POST(req: NextRequest) {
     if (event.type === 'checkout.session.completed' && session?.payment_status === 'paid') {
       // Only this event writes the register; a failure returns 500 so Stripe retries.
       const rec = await recordPaidBooking(session);
-      if (rec.created) await notifyAdmin(rec).catch((e) => console.error('Grotto admin email failed', e));
+      if (rec.created) {
+        // Email problems must never fail the webhook (Stripe would retry and the booking is already saved).
+        await Promise.all([
+          notifyAdmin(rec).catch((e) => console.error('Grotto admin email failed', e)),
+          sendParentConfirmation(rec).catch((e) => console.error('Grotto parent email failed', e)),
+        ]);
+      }
     } else if (event.type === 'checkout.session.expired') {
       await releaseHold(session?.metadata?.hold_id);
     }
