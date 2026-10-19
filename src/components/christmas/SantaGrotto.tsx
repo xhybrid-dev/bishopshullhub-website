@@ -7,7 +7,10 @@ import {
   GROTTO_START_ISO,
   GROTTO_TICKET_PRICE_PENCE,
 } from '@/lib/santa-grotto';
+import { Bell, CalendarDays, Clock, Cookie, Gift, Lock, Milk, Palette, Plus, Snowflake, Sparkles, Star, Ticket, TreePine, UserRound, X, Coffee } from 'lucide-react';
 import SantaPeek from './SantaPeek';
+import Sleigh from './Sleigh';
+import HubBanner from './HubBanner';
 import './santa-grotto.css';
 
 interface Child {
@@ -98,6 +101,17 @@ export default function SantaGrotto() {
 
   useEffect(() => { setBulbs(Math.ceil(innerWidth / 38)); }, []);
 
+  // Fade-and-rise sections into view as they're scrolled to.
+  useEffect(() => {
+    const els = document.querySelectorAll<HTMLElement>('.grotto [data-reveal]');
+    if (!('IntersectionObserver' in window)) { els.forEach((e) => e.classList.add('in')); return; }
+    const io = new IntersectionObserver((entries) => {
+      for (const en of entries) if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+    }, { threshold: 0.15 });
+    els.forEach((e) => io.observe(e));
+    return () => io.disconnect();
+  }, []);
+
   const updateKid = (id: number, patch: Partial<Child>) =>
     setKids((ks) => ks.map((k) => (k.id === id ? { ...k, ...patch } : k)));
 
@@ -121,7 +135,7 @@ export default function SantaGrotto() {
       }
       throw new Error(j.error || 'Something went wrong.');
     } catch (ex) {
-      setError(`🎅 ${ex instanceof Error ? ex.message : 'Something went wrong.'}`);
+      setError(ex instanceof Error ? ex.message : 'Something went wrong.');
       setBusy(false);
     }
   };
@@ -132,39 +146,45 @@ export default function SantaGrotto() {
       <div className="lights" aria-hidden="true">
         {Array.from({ length: bulbs }, (_, i) => <i key={i} />)}
       </div>
-      <div className="sleigh" aria-hidden="true"><span>🦌🦌🦌🦌🛷</span></div>
+      <div className="sleigh" aria-hidden="true"><Sleigh /></div>
 
       <header className="hero">
-        <div className="stars" aria-hidden="true">✨ ⭐ ✨ ⭐ ✨</div>
+        <div className="stars" aria-hidden="true">
+          <Sparkles /><Star /><Sparkles /><Star /><Sparkles />
+        </div>
         <SantaPeek />
         <h1>Santa’s Grotto</h1>
-        <div className="sub">at Bishops Hull Hub ❄️ Ho Ho Ho! ❄️</div>
-        <div>
-          <span className="badge">📅 Saturday 12th December</span>
-          <span className="badge">🕙 10am – 12pm</span>
-          <span className="badge">🎁 Arrive before 11 to see Santa!</span>
+        <div className="sub">at Bishops Hull Hub</div>
+        <div className="badges">
+          <span className="badge"><CalendarDays aria-hidden="true" /> Saturday 12th December</span>
+          <span className="badge"><Clock aria-hidden="true" /> 10am – 12pm</span>
+          <span className="badge"><Gift aria-hidden="true" /> Arrive before 11 to see Santa</span>
         </div>
         <Countdown />
-        <p className="sub">sleeps until the magic begins! 🌟</p>
+        <p className="sub tagline"><Sparkles aria-hidden="true" /> sleeps until the magic begins <Sparkles aria-hidden="true" /></p>
       </header>
 
       <div className="content">
         <div className="candy" aria-hidden="true" />
         <section className="cards" aria-label="What to expect">
-          <div className="card"><div className="e">🎅</div><h3>Meet Santa</h3><p>A magical one-to-one chat with the big man himself.</p></div>
-          <div className="card"><div className="e">🎨</div><h3>Magical Crafts</h3><p>Get stuck in with some festive, creative fun.</p></div>
-          <div className="card"><div className="e">☕</div><h3>Winter Cafe</h3><p>Enjoy hand baked Christmas treats and coffee.</p></div>
-          <div className="card"><div className="e">🎁</div><h3>A Gift from Santa</h3><p>Every child leaves with a little something from the grotto.</p></div>
+          <div className="card" data-reveal><div className="e"><UserRound /></div><h3>Meet Santa</h3><p>A magical one-to-one chat with the big man himself.</p></div>
+          <div className="card" data-reveal><div className="e"><Palette /></div><h3>Magical Crafts</h3><p>Get stuck in with some festive, creative fun.</p></div>
+          <div className="card" data-reveal><div className="e"><Coffee /></div><h3>Winter Cafe</h3><p>Enjoy hand baked Christmas treats and coffee.</p></div>
+          <div className="card" data-reveal><div className="e"><Gift /></div><h3>A Gift from Santa</h3><p>Every child leaves with a little something from the grotto.</p></div>
         </section>
         <div className="candy" aria-hidden="true" />
+      </div>
 
-        <section className="panel" id="book">
-          <h2>🎟️ Book Your Visit to Santa 🎟️</h2>
+      <HubBanner />
+
+      <div className="content">
+        <section className="panel" id="book" data-reveal>
+          <h2><Ticket aria-hidden="true" /> Book Your Visit to Santa</h2>
           <p style={{ textAlign: 'center' }}>
             One ticket per child. Fill in the details and we’ll send you to Stripe to pay safely.
           </p>
           <form onSubmit={submit} noValidate>
-            <h3>🧑‍🎄 Grown-up details</h3>
+            <h3><UserRound aria-hidden="true" /> Grown-up details</h3>
             <div className="row">
               <div>
                 <label htmlFor="pname">Your name</label>
@@ -183,14 +203,14 @@ export default function SantaGrotto() {
               </div>
             </div>
 
-            <h3>🧒 Little ones visiting Santa</h3>
+            <h3><Snowflake aria-hidden="true" /> Little ones visiting Santa</h3>
             {kids.map((k, i) => (
               <div className="child" key={k.id}>
                 {kids.length > 1 && (
                   <button type="button" className="remove" aria-label={`Remove child ${i + 1}`}
-                    onClick={() => setKids((ks) => ks.filter((x) => x.id !== k.id))}>❌</button>
+                    onClick={() => setKids((ks) => ks.filter((x) => x.id !== k.id))}><X aria-hidden="true" /></button>
                 )}
-                <h4>🎁 Child {i + 1}</h4>
+                <h4><Gift aria-hidden="true" /> Child {i + 1}</h4>
                 <div className="row">
                   <div>
                     <label htmlFor={`cn${k.id}`}>Child’s name</label>
@@ -216,26 +236,28 @@ export default function SantaGrotto() {
             {kids.length < GROTTO_MAX_CHILDREN && (
               <button type="button" className="add"
                 onClick={() => { setKids((ks) => [...ks, newChild(nextId)]); setNextId(nextId + 1); }}>
-                ➕ Add another child
+                <Plus aria-hidden="true" /> Add another child
               </button>
             )}
 
             <div className="total">
-              <span>🎁 Total</span>
+              <span><Gift aria-hidden="true" /> Total</span>
               <span>{kids.length} × {money(GROTTO_TICKET_PRICE_PENCE)} = {money(kids.length * GROTTO_TICKET_PRICE_PENCE)}</span>
             </div>
             <button className="go" type="submit" disabled={busy}>
-              {busy ? '🎄 Wrapping your tickets…' : '🎅 Pay & Book with Stripe 🎅'}
+              {busy ? 'Wrapping your tickets…' : <><Lock aria-hidden="true" /> Pay & Book with Stripe</>}
             </button>
             <div className="err" role="alert">{error}</div>
-            <p className="note">🔒 Secure payment by Stripe. Arrive before 11am so Santa can see everyone!</p>
+            <p className="note">Secure payment by Stripe. Arrive before 11am so Santa can see everyone.</p>
           </form>
         </section>
       </div>
 
       <div className="grotto-foot">
-        <div className="elves" aria-hidden="true">🧝 🎄 ⛄ 🎁 🔔 🍪 🥛 🧝‍♀️</div>
-        <p>Merry Christmas from all of us at the Hub! 🎄</p>
+        <div className="elves" aria-hidden="true">
+          <TreePine /><Bell /><Cookie /><Milk /><Snowflake /><Gift /><TreePine />
+        </div>
+        <p>Merry Christmas from all of us at the Hub</p>
       </div>
     </div>
   );
