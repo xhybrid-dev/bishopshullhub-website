@@ -153,7 +153,7 @@ export default function SantaGrotto() {
         <section className="cards" aria-label="What to expect">
           <div className="card"><div className="e">🎅</div><h3>Meet Santa</h3><p>A magical one-to-one chat with the big man himself.</p></div>
           <div className="card"><div className="e">🎨</div><h3>Magical Crafts</h3><p>Get stuck in with some festive, creative fun.</p></div>
-          <div className="card"><div className="e">🎄</div><h3>Winter Wonderland</h3><p>Twinkling lights, snowy scenes and festive surprises.</p></div>
+          <div className="card"><div className="e">☕</div><h3>Winter Cafe</h3><p>Enjoy hand baked Christmas treats and coffee.</p></div>
           <div className="card"><div className="e">🎁</div><h3>A Gift from Santa</h3><p>Every child leaves with a little something from the grotto.</p></div>
         </section>
         <div className="candy" aria-hidden="true" />

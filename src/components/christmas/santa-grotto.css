@@ -76,3 +76,20 @@
 .grotto-thanks .big{font-size:6rem}
 .grotto-thanks h1{font-size:clamp(2.2rem,8vw,4.5rem)}
 @media(prefers-reduced-motion:reduce){.grotto *{animation:none!important}.grotto #snow,.grotto .sleigh{display:none}}
+/* Desktop: the booking form was stretched across the full 980px column, which
+   made every field huge. Keep it a compact, centred card. */
+@media(min-width:900px){
+.grotto .panel{max-width:680px;margin-left:auto;margin-right:auto;padding:22px 28px 26px;border-width:5px;border-radius:24px}
+.grotto .panel h2{font-size:2rem;margin-top:8px}
+.grotto .panel h3{font-size:1.25rem;margin:14px 0 6px}
+.grotto .panel > p{font-size:.95rem;margin:6px 0}
+.grotto label{font-size:.85rem;margin-bottom:2px}
+.grotto input,.grotto select{padding:8px 12px;font-size:.95rem;border-radius:10px}
+.grotto .row{gap:10px}
+.grotto .child{padding:10px 12px;margin:8px 0;border-radius:14px}
+.grotto .child h4{font-size:1rem;margin-bottom:4px}
+.grotto button.add{padding:8px;font-size:.95rem;border-radius:12px}
+.grotto .total{font-size:1.1rem;padding:10px 14px;margin:14px 0 10px;border-radius:12px}
+.grotto button.go{font-size:1.4rem;padding:11px;border-radius:14px}
+.grotto .note{font-size:.8rem;margin-top:8px}
+}
