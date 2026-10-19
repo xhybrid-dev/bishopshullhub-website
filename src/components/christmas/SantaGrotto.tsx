@@ -7,6 +7,7 @@ import {
   GROTTO_START_ISO,
   GROTTO_TICKET_PRICE_PENCE,
 } from '@/lib/santa-grotto';
+import SantaPeek from './SantaPeek';
 import './santa-grotto.css';
 
 interface Child {
@@ -131,11 +132,11 @@ export default function SantaGrotto() {
       <div className="lights" aria-hidden="true">
         {Array.from({ length: bulbs }, (_, i) => <i key={i} />)}
       </div>
-      <div className="sleigh" aria-hidden="true">🦌🦌🦌🦌🛷🎅</div>
+      <div className="sleigh" aria-hidden="true"><span>🦌🦌🦌🦌🛷</span></div>
 
       <header className="hero">
         <div className="stars" aria-hidden="true">✨ ⭐ ✨ ⭐ ✨</div>
-        <div className="santa" aria-hidden="true">🎅</div>
+        <SantaPeek />
         <h1>Santa’s Grotto</h1>
         <div className="sub">at Bishops Hull Hub ❄️ Ho Ho Ho! ❄️</div>
         <div>
@@ -151,7 +152,7 @@ export default function SantaGrotto() {
         <div className="candy" aria-hidden="true" />
         <section className="cards" aria-label="What to expect">
           <div className="card"><div className="e">🎅</div><h3>Meet Santa</h3><p>A magical one-to-one chat with the big man himself.</p></div>
-          <div className="card"><div className="e">🦌</div><h3>Reindeer Magic</h3><p>Rudolph and friends are parked up out the back!</p></div>
+          <div className="card"><div className="e">🎨</div><h3>Magical Crafts</h3><p>Get stuck in with some festive, creative fun.</p></div>
           <div className="card"><div className="e">🎄</div><h3>Winter Wonderland</h3><p>Twinkling lights, snowy scenes and festive surprises.</p></div>
           <div className="card"><div className="e">🎁</div><h3>A Gift from Santa</h3><p>Every child leaves with a little something from the grotto.</p></div>
         </section>

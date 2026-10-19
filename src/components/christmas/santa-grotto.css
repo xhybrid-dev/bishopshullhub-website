@@ -13,14 +13,31 @@
 .grotto .lights i:nth-child(4n+1){background:#ff3b4e;color:#ff3b4e}.grotto .lights i:nth-child(4n+2){background:#ffd56b;color:#ffd56b;animation-delay:.4s}
 .grotto .lights i:nth-child(4n+3){background:#3dff8c;color:#3dff8c;animation-delay:.8s}.grotto .lights i:nth-child(4n){background:#4db8ff;color:#4db8ff;animation-delay:1.2s}
 @keyframes grotto-twinkle{from{opacity:.35;transform:scale(.9)}to{opacity:1;transform:scale(1.05)}}
+.grotto .sleigh span{display:inline-block;transform:scaleX(-1)}
 .grotto .sleigh{position:absolute;top:70px;left:-300px;font-size:3rem;white-space:nowrap;z-index:4;animation:grotto-fly 22s linear infinite;pointer-events:none;filter:drop-shadow(0 0 12px #ffd56b)}
 @keyframes grotto-fly{0%{transform:translate(0,0) rotate(-4deg)}50%{transform:translate(60vw,40px) rotate(3deg)}100%{transform:translate(115vw,-10px) rotate(-4deg)}}
 .grotto .hero{text-align:center;padding:90px 16px 40px;position:relative}
 .grotto .stars{font-size:1.4rem;letter-spacing:.5rem;animation:grotto-twinkle 2s infinite alternate}
 .grotto h1{font-size:clamp(3rem,11vw,7rem);line-height:1.1;background:linear-gradient(180deg,#fff,#ffd56b 55%,#ff5a6e);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 0 #5a0714);margin:10px 0}
 .grotto .sub{font-size:clamp(1.1rem,3.5vw,1.6rem);color:var(--gold)}
-.grotto .santa{font-size:clamp(5rem,20vw,10rem);display:inline-block;animation:grotto-bob 2.4s ease-in-out infinite;filter:drop-shadow(0 8px 20px #000a)}
-@keyframes grotto-bob{50%{transform:translateY(-14px) rotate(3deg)}}
+.grotto .santa-peek{position:relative;display:inline-block;width:clamp(170px,42vw,250px);margin-top:10px}
+.grotto .santa-svg{display:block;width:100%;height:auto;overflow:hidden;filter:drop-shadow(0 8px 20px #000a)}
+.grotto .santa-rise{animation:grotto-rise 1s cubic-bezier(.2,1.3,.4,1) both}
+.grotto .santa-bob{animation:grotto-peek 3.2s ease-in-out infinite}
+.grotto .santa-eyes{transform-box:fill-box;transform-origin:center;animation:grotto-blink 4.5s infinite}
+.grotto .santa-mouth{transform-box:fill-box;transform-origin:center;animation:grotto-ho 1.8s ease-in-out infinite}
+.grotto .santa-tip{transform-origin:118px 40px;animation:grotto-swing 2.4s ease-in-out infinite alternate}
+.grotto .santa-wave{transform-origin:146px 184px;animation:grotto-wave 1.1s ease-in-out infinite alternate}
+.grotto .bubble{position:absolute;left:100%;top:6%;margin-left:6px;width:max-content;max-width:min(210px,40vw);background:#fff;color:var(--deep);font-family:var(--font-permanent-marker),cursive;font-size:clamp(.95rem,2.6vw,1.2rem);line-height:1.25;padding:10px 14px;border-radius:18px;border:3px solid var(--gold);box-shadow:0 6px 0 #0004;text-align:left;animation:grotto-pop .35s ease-out}
+.grotto .bubble::before{content:"";position:absolute;left:-14px;top:22px;border:8px solid transparent;border-right:12px solid var(--gold)}
+@media(max-width:700px){.grotto .santa-peek{margin-top:64px}.grotto .bubble{left:50%;top:-14px;transform:translate(-50%,-100%);margin:0;text-align:center}.grotto .bubble::before{left:calc(50% - 8px);top:100%;border-right-color:transparent;border-top:12px solid var(--gold)}}
+@keyframes grotto-pop{from{opacity:0;scale:.85}to{opacity:1;scale:1}}
+@keyframes grotto-rise{from{transform:translateY(70px)}to{transform:none}}
+@keyframes grotto-peek{50%{transform:translateY(-6px) rotate(1.5deg)}}
+@keyframes grotto-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.08)}}
+@keyframes grotto-ho{0%,100%{transform:scale(1,.45)}25%,75%{transform:scale(1.15,1.1)}}
+@keyframes grotto-swing{from{transform:rotate(-9deg)}to{transform:rotate(9deg)}}
+@keyframes grotto-wave{from{transform:rotate(-14deg)}to{transform:rotate(16deg)}}
 .grotto .badge{display:inline-block;margin:14px 6px 0;padding:10px 20px;border-radius:999px;background:var(--red);border:3px dashed var(--gold);font-weight:600;box-shadow:0 0 24px #ff3b4e88}
 .grotto .countdown{display:flex;gap:12px;justify-content:center;margin:26px 0 8px;flex-wrap:wrap;min-height:84px}
 .grotto .countdown div{background:linear-gradient(#fff,#ffe9d0);color:var(--deep);min-width:78px;padding:10px 6px;border-radius:14px;border-bottom:5px solid var(--red);box-shadow:0 6px 0 #0004}
