@@ -11,6 +11,7 @@ export const metadata: Metadata = {
     description: 'Saturday 12th December 2026, 10am–12pm. Book your child’s visit to Santa.',
     url: 'https://bhhub.co.uk/christmas2026',
     type: 'website',
+    images: [{ url: '/images/hub-christmas.webp', width: 2000, height: 1116, alt: 'Bishops Hull Hub in the snow' }],
   },
 };
 
