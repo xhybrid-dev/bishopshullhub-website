@@ -74,3 +74,6 @@ export function childrenFromMetadata(meta: Record<string, string> | null | undef
     .sort((a, b) => Number(a[1]) - Number(b[1]))
     .map((m) => parseChildMeta(meta![m[0]]));
 }
+
+/** Where parents' replies (special requirements, questions) are sent. */
+export const GROTTO_CONTACT_EMAIL = 'trustees@bishopshullhub.co.uk';

@@ -66,6 +66,7 @@ export interface StripeCheckoutSession {
 }
 
 export interface RecordedBooking {
+  sessionId: string;
   created: boolean;
   overCapacity: boolean;
   booking: {
@@ -106,5 +107,5 @@ export async function recordPaidBooking(session: StripeCheckoutSession): Promise
     if (meta.hold_id) tx.delete(db.collection(HOLDS).doc(meta.hold_id));
     return { created: true, overCapacity };
   });
-  return { ...result, booking };
+  return { ...result, booking, sessionId: session.id };
 }
