@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import SantaGrotto from '@/components/christmas/SantaGrotto';
+import { grottoFontVars } from './fonts';
 
 export const metadata: Metadata = {
   title: 'Santa’s Grotto 2026 | Bishops Hull Hub',
@@ -16,5 +17,9 @@ export const metadata: Metadata = {
 };
 
 export default function Christmas2026Page() {
-  return <SantaGrotto />;
+  return (
+    <div className={grottoFontVars}>
+      <SantaGrotto />
+    </div>
+  );
 }
