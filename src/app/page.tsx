@@ -8,6 +8,8 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import HeroSection from '@/components/HeroSection';
 import ReviewsCarousel from '@/components/ReviewsCarousel';
 import DroneTourSection from '@/components/DroneTourSection';
+import GrottoBanner from '@/components/christmas/GrottoBanner';
+import { grottoFontVars } from '@/app/christmas2026/fonts';
 
 export default function HomePage() {
   const heroImage = PlaceHolderImages.find(img => img.id === 'hero-bg');
@@ -18,8 +20,11 @@ export default function HomePage() {
       {/* Hero Section - Parallax with frosted glass scroll effect */}
       <HeroSection heroImageUrl={heroImage?.imageUrl || "https://picsum.photos/seed/bhh-hero/1200/600"} />
 
+      {/* Santa Grotto promo — hides itself once the event is over */}
+      <GrottoBanner className={`container mx-auto px-4 -mt-12 md:-mt-24 relative z-30 ${grottoFontVars}`} />
+
       {/* Primary Call to Action Cards */}
-      <section className="container mx-auto px-4 -mt-12 md:-mt-24 relative z-30">
+      <section className="container mx-auto px-4 -mt-2 md:-mt-8 relative z-30">
         <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
           <Card className="bg-white shadow-xl border-t-4 border-t-primary hover:translate-y-[-4px] hover:shadow-2xl hover:shadow-primary/15 hover:border-primary/30 transition-all duration-300 ease-out rounded-[2rem]">
             <CardHeader className="p-5 md:p-8 pb-2">
