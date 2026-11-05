@@ -1,6 +1,6 @@
 // Shared by the /christmas2026 booking form (client) and the Stripe checkout
 // route (server), so both enforce the same limits.
-export const GROTTO_TICKET_PRICE_PENCE = 500;
+export const GROTTO_TICKET_PRICE_PENCE = 250;
 export const GROTTO_MAX_CHILDREN = 6;
 export const GROTTO_GENDERS = ['Girl', 'Boy', 'Prefer not to say'] as const;
 export const GROTTO_EVENT_LABEL = 'Santa Grotto 2026-12-12';
