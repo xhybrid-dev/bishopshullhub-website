@@ -9,7 +9,7 @@ const results: Array<[boolean, string, string]> = [];
 const check = (name: string, cond: unknown, detail = '') => results.push([!!cond, name, detail]);
 
 const session = (id: string, n: number, hold?: string) => ({
-  id, payment_status: 'paid', amount_total: 500 * n, payment_intent: 'pi_' + id, customer_email: `${id}@x.co`,
+  id, payment_status: 'paid', amount_total: 250 * n, payment_intent: 'pi_' + id, customer_email: `${id}@x.co`,
   metadata: {
     parent_name: 'Parent ' + id, parent_phone: '07000', ...(hold ? { hold_id: hold } : {}),
     ...Object.fromEntries(Array.from({ length: n }, (_, i) => [`child_${i + 1}`, `Kid${i + 1} | age ${3 + i} | Girl`])),
