@@ -47,7 +47,7 @@ check('email asks for requirements by replying', em.html.includes('simply reply 
 check('email lists the children and ref', em.html.includes('Max') && em.html.includes('AB12CD34') && em.text.includes('AB12CD34'));
 check('email escapes names (no HTML injection)', !em.html.includes('<img src=x') && !em.html.includes('<script>x') && em.html.includes('&lt;img'));
 check('email mailto goes to the trustees inbox', em.html.includes('mailto:trustees@bishopshullhub.co.uk?subject='));
-check('single ticket wording', buildGrottoConfirmationEmail({ parentName: 'A', children: [{ name: 'K', age: 4 }], amountPence: 500, ref: 'X' }).text.includes('Your 1 ticket for'));
+check('single ticket wording', buildGrottoConfirmationEmail({ parentName: 'A', children: [{ name: 'K', age: 4 }], amountPence: 250, ref: 'X' }).text.includes('Your 1 ticket for'));
 
 let failed = 0;
 for (const [ok, name, detail] of results) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : `  ${detail}`}`); }

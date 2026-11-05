@@ -30,7 +30,7 @@ A payment that lands after the hold expired is still recorded (the parent has pa
    `checkout.session.expired`. Copy its signing secret (`whsec_…`) into `stripe-webhook-secret`.
 6. Confirm the App Hosting service account can read/write Firestore (it uses application default credentials).
 7. Test with Stripe test keys and card 4242 4242 4242 4242, check the booking appears in Admin → Xmas 2026,
-   then swap in live keys and make one real £5 booking (refund it afterwards).
+   then swap in live keys and make one real £2.50 booking (refund it afterwards).
 8. Update the privacy page (children's names/ages are collected) and add a refund policy.
 
 ## Tests
