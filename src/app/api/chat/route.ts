@@ -135,7 +135,7 @@ CANCELLATION POLICY:
 - Cancellations less than 4 weeks before the booking date: hire fee is not refundable, only the deposit is returned
 
 COMMUNITY:
-- 100 Club: £5/month membership with a monthly prize draw; profits support Hub improvements
+- Bishops Hull Community Lottery (formerly the 100 Club): £5 a month per ticket, a monthly prize draw ("The Big Draw") with three cash prizes; proceeds support the Hub; players must be 16 or over. Details and sign-up: https://bhhub.co.uk/lottery
 - "Buy a Brick" memorial scheme available
 - Volunteer opportunities available — contact trustees@bishopshullhub.co.uk
 `.trim();

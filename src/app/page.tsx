@@ -137,10 +137,10 @@ export default function HomePage() {
               color: "bg-white"
             },
             {
-              title: "Join the 100 Club",
-              desc: "Support your hub and win monthly prizes.",
+              title: "Community Lottery",
+              desc: "£5 a month, three cash prizes every month, and every ticket supports your Hub. Formerly the 100 Club.",
               icon: Heart,
-              href: "/community#100-club",
+              href: "/lottery",
               color: "bg-white"
             }
           ].map((item, idx) => (

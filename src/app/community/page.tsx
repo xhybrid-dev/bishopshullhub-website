@@ -1,6 +1,7 @@
 
 import type { Metadata } from 'next';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Heart, Landmark, Music, Wind, Hand, TreePine, Accessibility, Download, Users } from 'lucide-react';
@@ -184,19 +185,22 @@ export default function CommunityPage() {
 
       {/* Fundraising Grid */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-12">
+        {/* Keeps the old #100-club anchor so existing links and QR codes still land here. */}
         <div id="100-club" className="space-y-6 p-10 rounded-[3rem] bg-primary/5 border border-primary/10 scroll-mt-24 shadow-sm hover:shadow-md transition-shadow">
           <div className="h-14 w-14 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center">
             <Heart className="h-8 w-8" />
           </div>
-          <h2 className="text-3xl font-headline font-bold text-primary">Join the 100 Club</h2>
-          <p className="text-lg text-muted-foreground leading-relaxed">
-            The 100 Club is a fantastic way to support the maintenance of the Hub while having a chance to win! 
-            For just £5 a month, you are entered into our monthly prize draw. All profits go directly towards Hub improvements.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button size="lg" className="bg-primary hover:bg-primary/90 rounded-xl px-8">Sign Up Digitally</Button>
-            <Button variant="outline" size="lg" className="rounded-xl px-8">Download Form</Button>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold uppercase tracking-wider text-primary/70">Formerly the 100 Club</p>
+            <h2 id="lottery" className="text-3xl font-headline font-bold text-primary">Bishops Hull Community Lottery</h2>
           </div>
+          <p className="text-lg text-muted-foreground leading-relaxed">
+            A little chance to win. A big difference for our village. For just £5 a month you&rsquo;re entered into
+            The Big Draw, with three cash prizes to be won every month, and every ticket helps support the Hub.
+          </p>
+          <Button asChild size="lg" className="bg-primary hover:bg-primary/90 rounded-xl px-8">
+            <Link href="/lottery">Find out more &amp; join</Link>
+          </Button>
         </div>
 
         <div id="buy-a-brick" className="space-y-6 p-10 rounded-[3rem] bg-accent/5 border border-accent/20 scroll-mt-24 shadow-sm hover:shadow-md transition-shadow">
