@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
-import { collection, doc, orderBy, query, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, setDoc, updateDoc } from 'firebase/firestore';
 import { Download, Loader2, Printer, Settings2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useDoc, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import { GROTTO_CAPACITY, GROTTO_CAPACITY_MAX, parseCapacity } from '@/lib/santa-grotto';
 import { buildRegisterRows, registerToCsv, registerToPrintHtml, type RegisterBooking } from '@/lib/grotto-register';
 
@@ -26,10 +26,20 @@ export function GrottoRegister({ enabled }: { enabled: boolean }) {
   }, [firestore, enabled]);
   const { data, isLoading, error } = useCollection<RegisterBooking>(bookingsQuery);
 
-  // Capacity admins have saved (falls back to the built-in default).
-  const settingsRef = useMemoFirebase(() => (enabled ? doc(firestore, 'grotto_meta', 'settings') : null), [firestore, enabled]);
-  const { data: settings } = useDoc<{ capacity?: number }>(settingsRef);
-  const capacity = parseCapacity(settings?.capacity) ?? GROTTO_CAPACITY;
+  // Capacity admins have saved (falls back to the built-in default). Listened to
+  // directly, with its own error handler, so a missing/undeployed security rule
+  // shows a notice here instead of an uncaught app-wide permission error.
+  const [savedCapacity, setSavedCapacity] = useState<unknown>(undefined);
+  const [settingsBlocked, setSettingsBlocked] = useState(false);
+  useEffect(() => {
+    if (!enabled) return;
+    return onSnapshot(
+      doc(firestore, 'grotto_meta', 'settings'),
+      (snap) => { setSettingsBlocked(false); setSavedCapacity(snap.data()?.capacity); },
+      () => setSettingsBlocked(true),
+    );
+  }, [firestore, enabled]);
+  const capacity = parseCapacity(savedCapacity) ?? GROTTO_CAPACITY;
   const [capacityInput, setCapacityInput] = useState('');
   const [savingCapacity, setSavingCapacity] = useState(false);
   useEffect(() => { setCapacityInput(String(capacity)); }, [capacity]);
@@ -42,7 +52,7 @@ export function GrottoRegister({ enabled }: { enabled: boolean }) {
       await setDoc(doc(firestore, 'grotto_meta', 'settings'), { capacity: newCapacity });
       toast({ title: 'Places updated', description: `The grotto now has ${newCapacity} places. The booking page and home banner use this straight away.` });
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Could not save', description: e?.message });
+      toast({ variant: 'destructive', title: 'Could not save', description: e?.code === 'permission-denied' ? 'Firestore is refusing the change. The latest security rules may not be deployed yet.' : e?.message });
     } finally {
       setSavingCapacity(false);
     }
@@ -131,10 +141,11 @@ export function GrottoRegister({ enabled }: { enabled: boolean }) {
               <Input id="grotto-capacity" type="number" inputMode="numeric" min={0} max={GROTTO_CAPACITY_MAX} className="w-28"
                 value={capacityInput} onChange={(e) => setCapacityInput(e.target.value)} />
             </div>
-            <Button onClick={saveCapacity} disabled={savingCapacity || newCapacity === null || newCapacity === capacity}>
+            <Button onClick={saveCapacity} disabled={savingCapacity || settingsBlocked || newCapacity === null || newCapacity === capacity}>
               {savingCapacity ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
             </Button>
           </div>
+          {settingsBlocked && <p className="text-xs text-destructive sm:basis-full">Can’t load or save this setting yet: the latest Firestore security rules haven’t been deployed. The default of {GROTTO_CAPACITY} places is in use until they are.</p>}
           {newCapacity === null && <p className="text-xs text-destructive sm:basis-full">Enter a whole number from 0 to {GROTTO_CAPACITY_MAX}.</p>}
           {newCapacity !== null && newCapacity < rows.length && <p className="text-xs text-amber-700 sm:basis-full">That is fewer than the {rows.length} children already booked, so the page will show “Fully booked”.</p>}
         </CardContent>
