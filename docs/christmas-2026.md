@@ -1,6 +1,6 @@
 # Santa Grotto 2026 – payments and register
 
-Saturday 12 December 2026, 10am–12pm. Page: `/christmas2026`. Capacity: 80 children
+Saturday 12 December 2026, 10am–12pm. Page: `/christmas2026`. Capacity: 60 children
 (`GROTTO_CAPACITY` in `src/lib/santa-grotto.ts`).
 
 ## How it works
