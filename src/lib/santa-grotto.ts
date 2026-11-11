@@ -40,7 +40,7 @@ export function validateGrottoBooking(b: any): { error: string } | GrottoBooking
 }
 
 /** Total children the grotto can take. Enforced when a checkout is started. */
-export const GROTTO_CAPACITY = 80;
+export const GROTTO_CAPACITY = 60;
 /** Stripe's minimum Checkout Session lifetime. Places are held for this long. */
 export const GROTTO_HOLD_MINUTES = 30;
 

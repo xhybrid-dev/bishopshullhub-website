@@ -17,25 +17,25 @@ const session = (id: string, n: number, hold?: string) => ({
 });
 
 (async () => {
-  check('starts with all 80 places free', (await getAvailability()).remaining === 80);
+  check('starts with all 60 places free', (await getAvailability()).remaining === 60);
 
   const h1 = await reservePlaces(6);
-  check('a hold reduces availability', (await getAvailability()).remaining === 74);
+  check('a hold reduces availability', (await getAvailability()).remaining === 54);
 
   const rec = await recordPaidBooking(session('s1', 3, h1.holdId));
   check('paid booking recorded', rec.created && rec.booking.children.length === 3 && rec.booking.parentName === 'Parent s1');
-  check('hold released, 3 sold', (await getAvailability()).remaining === 77);
+  check('hold released, 3 sold', (await getAvailability()).remaining === 57);
 
   const again = await recordPaidBooking(session('s1', 3));
-  check('duplicate webhook is ignored', !again.created && (await getAvailability()).remaining === 77);
+  check('duplicate webhook is ignored', !again.created && (await getAvailability()).remaining === 57);
 
-  // fill up: 77 left → 12 holds of 6 = 72, then 5 more
-  for (let i = 0; i < 12; i++) await reservePlaces(6);
-  await reservePlaces(5);
+  // fill up: 57 left → 9 holds of 6 = 54, then 3 more
+  for (let i = 0; i < 9; i++) await reservePlaces(6);
+  await reservePlaces(3);
   check('fully held', (await getAvailability()).remaining === 0);
   let err: unknown;
   await reservePlaces(1).catch((e) => (err = e));
-  check('81st place refused', err instanceof SoldOutError && (err as SoldOutError).remaining === 0);
+  check('61st place refused', err instanceof SoldOutError && (err as SoldOutError).remaining === 0);
 
   // concurrent race for the last places
   const h = await reservePlaces(0 + 1).catch(() => null);
@@ -47,8 +47,8 @@ const session = (id: string, n: number, hold?: string) => ({
   const won = race.filter((r) => r.status === 'fulfilled').length;
   check('concurrent reservations cannot oversell the last 6', won === 1, `won=${won}`);
 
-  for (let i = 0; i < 12; i++) await recordPaidBooking(session('fill' + i, 6)); // 3 + 72 = 75 sold
-  const over = await recordPaidBooking(session('s2', 6)); // 81 > 80
+  for (let i = 0; i < 9; i++) await recordPaidBooking(session('fill' + i, 6)); // 3 + 54 = 57 sold
+  const over = await recordPaidBooking(session('s2', 6)); // 63 > 60
   check('a late paid booking past capacity is still recorded but flagged', over.created && over.overCapacity);
 
   let failed = 0;
