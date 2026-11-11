@@ -1,15 +1,25 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { getAdminFirestore } from '@/lib/firestore-admin';
-import { childrenFromMetadata, GROTTO_CAPACITY, GROTTO_HOLD_MINUTES } from '@/lib/santa-grotto';
+import { childrenFromMetadata, GROTTO_CAPACITY, GROTTO_HOLD_MINUTES, parseCapacity } from '@/lib/santa-grotto';
 
 // Collections (the register itself is `grotto_bookings`, read by admins in the
 // portal; the other two are server-only bookkeeping):
 //   grotto_bookings/{stripeSessionId}  one paid booking
 //   grotto_holds/{id}                  places reserved while someone is on the Stripe page
 //   grotto_meta/stats                  { childrenSold } running total
+//   grotto_meta/settings               { capacity } set by admins in the portal
 const BOOKINGS = 'grotto_bookings';
 const HOLDS = 'grotto_holds';
 const STATS = 'grotto_meta/stats';
+const SETTINGS = 'grotto_meta/settings';
+
+/** The capacity admins saved, or the default when none (or an invalid one) is saved. */
+export const capacityFrom = (data: FirebaseFirestore.DocumentData | undefined) =>
+  parseCapacity(data?.capacity) ?? GROTTO_CAPACITY;
+
+export async function getCapacity() {
+  return capacityFrom((await getAdminFirestore().doc(SETTINGS).get()).data());
+}
 
 export class SoldOutError extends Error {
   constructor(public remaining: number) {
@@ -19,13 +29,15 @@ export class SoldOutError extends Error {
 
 export async function getAvailability() {
   const db = getAdminFirestore();
-  const [stats, holds] = await Promise.all([
+  const [stats, holds, settings] = await Promise.all([
     db.doc(STATS).get(),
     db.collection(HOLDS).where('expiresAt', '>', Timestamp.now()).get(),
+    db.doc(SETTINGS).get(),
   ]);
+  const capacity = capacityFrom(settings.data());
   const sold = (stats.data()?.childrenSold as number | undefined) ?? 0;
   const held = holds.docs.reduce((n, d) => n + ((d.data().children as number) ?? 0), 0);
-  return { capacity: GROTTO_CAPACITY, remaining: Math.max(0, GROTTO_CAPACITY - sold - held) };
+  return { capacity, remaining: Math.max(0, capacity - sold - held) };
 }
 
 /**
@@ -37,13 +49,14 @@ export async function reservePlaces(count: number): Promise<{ holdId: string; ex
   const holdRef = db.collection(HOLDS).doc();
   const expires = Date.now() + (GROTTO_HOLD_MINUTES + 1) * 60_000;
   await db.runTransaction(async (tx) => {
-    const [stats, holds] = await Promise.all([
+    const [stats, holds, settings] = await Promise.all([
       tx.get(db.doc(STATS)),
       tx.get(db.collection(HOLDS).where('expiresAt', '>', Timestamp.now())),
+      tx.get(db.doc(SETTINGS)),
     ]);
     const sold = (stats.data()?.childrenSold as number | undefined) ?? 0;
     const held = holds.docs.reduce((n, d) => n + ((d.data().children as number) ?? 0), 0);
-    const remaining = GROTTO_CAPACITY - sold - held;
+    const remaining = capacityFrom(settings.data()) - sold - held;
     if (count > remaining) throw new SoldOutError(Math.max(0, remaining));
     tx.set(holdRef, { children: count, expiresAt: Timestamp.fromMillis(expires), createdAt: Timestamp.now() });
   });
@@ -69,6 +82,7 @@ export interface RecordedBooking {
   sessionId: string;
   created: boolean;
   overCapacity: boolean;
+  capacity: number;
   booking: {
     parentName: string; parentEmail: string; parentPhone: string;
     children: Array<{ name: string; age: number | null; gender: string; arrived: boolean }>;
@@ -92,10 +106,11 @@ export async function recordPaidBooking(session: StripeCheckoutSession): Promise
   const bookingRef = db.collection(BOOKINGS).doc(session.id);
   const statsRef = db.doc(STATS);
   const result = await db.runTransaction(async (tx) => {
-    const [existing, stats] = await Promise.all([tx.get(bookingRef), tx.get(statsRef)]);
-    if (existing.exists) return { created: false, overCapacity: false };
+    const [existing, stats, settings] = await Promise.all([tx.get(bookingRef), tx.get(statsRef), tx.get(db.doc(SETTINGS))]);
+    const capacity = capacityFrom(settings.data());
+    if (existing.exists) return { created: false, overCapacity: false, capacity };
     const sold = (stats.data()?.childrenSold as number | undefined) ?? 0;
-    const overCapacity = sold + children.length > GROTTO_CAPACITY;
+    const overCapacity = sold + children.length > capacity;
     tx.set(bookingRef, {
       ...booking,
       childCount: children.length,
@@ -105,7 +120,7 @@ export async function recordPaidBooking(session: StripeCheckoutSession): Promise
     });
     tx.set(statsRef, { childrenSold: sold + children.length }, { merge: true });
     if (meta.hold_id) tx.delete(db.collection(HOLDS).doc(meta.hold_id));
-    return { created: true, overCapacity };
+    return { created: true, overCapacity, capacity };
   });
   return { ...result, booking, sessionId: session.id };
 }

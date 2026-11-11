@@ -139,6 +139,21 @@ await t('grotto: holds and stats are not client-readable', async () => {
 await t('grotto: public cannot fake a sold-out/open counter', () =>
   assertFails(setDoc(doc(attacker, 'grotto_meta', 'stats'), { childrenSold: 0 })));
 
+// --- admin-editable capacity (grotto_meta/settings) ---
+const gs = (db) => doc(db, 'grotto_meta', 'settings');
+await t('grotto: admin can set the capacity', () => assertSucceeds(setDoc(gs(admin), { capacity: 40 })));
+await t('grotto: admin can read the capacity', () => assertSucceeds(getDoc(gs(admin))));
+await t('grotto: admin can change the capacity again', () => assertSucceeds(setDoc(gs(admin), { capacity: 70 })));
+await t('grotto: capacity cannot be negative', () => assertFails(setDoc(gs(admin), { capacity: -1 })));
+await t('grotto: capacity cannot exceed 500', () => assertFails(setDoc(gs(admin), { capacity: 501 })));
+await t('grotto: capacity must be a whole number', () => assertFails(setDoc(gs(admin), { capacity: 40.5 })));
+await t('grotto: capacity must be a number', () => assertFails(setDoc(gs(admin), { capacity: '40' })));
+await t('grotto: capacity doc takes no other fields', () => assertFails(setDoc(gs(admin), { capacity: 40, extra: 1 })));
+await t('grotto: signed-in non-admin cannot set the capacity', () => assertFails(setDoc(gs(attacker), { capacity: 999 })));
+await t('grotto: public cannot set the capacity', () => assertFails(setDoc(gs(guest), { capacity: 999 })));
+await t('grotto: non-admin cannot read the capacity doc', () => assertFails(getDoc(gs(attacker))));
+await t('grotto: capacity doc cannot be deleted from a client', () => assertFails(deleteDoc(gs(admin))));
+
 await env.cleanup();
 
 console.log('');

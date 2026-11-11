@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { verifyStripeSignature } from '@/lib/stripe-signature';
 import { recordPaidBooking, releaseHold, type StripeCheckoutSession } from '@/lib/grotto-bookings';
-import { GROTTO_CAPACITY, GROTTO_CONTACT_EMAIL } from '@/lib/santa-grotto';
+import { GROTTO_CONTACT_EMAIL } from '@/lib/santa-grotto';
 import { buildGrottoConfirmationEmail } from '@/lib/grotto-email';
 
 const resend = new Resend(process.env.RESEND_API_KEY || 're_your_api_key_here');
@@ -16,7 +16,7 @@ async function notifyAdmin(rec: Awaited<ReturnType<typeof recordPaidBooking>>) {
   const kids = b.children.map((c) => `${c.name} (${c.age ?? '?'}, ${c.gender || '—'})`).join(', ');
   const subject = `Santa Grotto booking: ${b.parentName} (${b.children.length} child${b.children.length === 1 ? '' : 'ren'})`;
   const text = `New Santa Grotto booking\n\nParent: ${b.parentName}\nEmail: ${b.parentEmail}\nPhone: ${b.parentPhone}\nChildren: ${kids}\nPaid: £${(b.amountPence / 100).toFixed(2)}` +
-    (rec.overCapacity ? `\n\nWARNING: this takes the grotto over its ${GROTTO_CAPACITY}-child capacity. Check the register.` : '');
+    (rec.overCapacity ? `\n\nWARNING: this takes the grotto over its ${rec.capacity}-child capacity. Check the register.` : '');
   if (!process.env.RESEND_API_KEY) { console.log(`[grotto] (email simulated)\n${subject}\n${text}`); return; }
   await resend.emails.send({
     from: 'Bishops Hull Hub <noreply@bishopshullhub.co.uk>',
@@ -26,7 +26,7 @@ async function notifyAdmin(rec: Awaited<ReturnType<typeof recordPaidBooking>>) {
     html: `<div style="font-family:Arial,sans-serif;max-width:560px"><h2>New Santa Grotto booking</h2>
       <p><strong>Parent:</strong> ${esc(b.parentName)}<br><strong>Email:</strong> ${esc(b.parentEmail)}<br><strong>Phone:</strong> ${esc(b.parentPhone)}</p>
       <p><strong>Children:</strong> ${esc(kids)}</p><p><strong>Paid:</strong> £${(b.amountPence / 100).toFixed(2)}</p>
-      ${rec.overCapacity ? `<p style="color:#b00020"><strong>Over capacity (${GROTTO_CAPACITY}). Check the register.</strong></p>` : ''}</div>`,
+      ${rec.overCapacity ? `<p style="color:#b00020"><strong>Over capacity (${rec.capacity}). Check the register.</strong></p>` : ''}</div>`,
   });
 }
 

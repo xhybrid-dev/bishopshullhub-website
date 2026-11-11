@@ -145,7 +145,18 @@ service cloud.firestore {
       allow update: if isExistingAdmin();
       allow create, delete: if false;
     }
-    // grotto_holds and grotto_meta are server-only: no rule = no client access.
+    // Admin-editable capacity. Only a whole number from 0 to 500 is accepted;
+    // the server falls back to the default if the doc is missing or invalid.
+    match /grotto_meta/settings {
+      allow get: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['capacity'])
+        && request.resource.data.capacity is int
+        && request.resource.data.capacity >= 0
+        && request.resource.data.capacity <= 500;
+      allow list, delete: if false;
+    }
+    // grotto_holds and the rest of grotto_meta (stats) are server-only: no rule = no client access.
 
     match /admins/{adminId} {
       // Same Activate-flow allowance: anyone can probe a single doc by email,
