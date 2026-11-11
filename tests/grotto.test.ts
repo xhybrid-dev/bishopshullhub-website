@@ -4,7 +4,7 @@
  */
 import { createHmac } from 'crypto';
 import { verifyStripeSignature } from '../src/lib/stripe-signature';
-import { parseChildMeta, childrenFromMetadata } from '../src/lib/santa-grotto';
+import { parseChildMeta, childrenFromMetadata, parseCapacity } from '../src/lib/santa-grotto';
 import { buildRegisterRows, registerToCsv } from '../src/lib/grotto-register';
 import { buildGrottoConfirmationEmail } from '../src/lib/grotto-email';
 
@@ -16,6 +16,9 @@ const secret = 'whsec_test';
 const body = '{"type":"checkout.session.completed"}';
 const now = 1_800_000_000;
 const sign = (t: number, b = body, s = secret) => `t=${t},v1=${createHmac('sha256', s).update(`${t}.${b}`).digest('hex')}`;
+check('capacity: whole numbers accepted', parseCapacity(60) === 60 && parseCapacity('45') === 45 && parseCapacity(' 7 ') === 7 && parseCapacity(0) === 0 && parseCapacity(500) === 500);
+check('capacity: missing or empty is invalid, not zero', parseCapacity(undefined) === null && parseCapacity(null) === null && parseCapacity('') === null && parseCapacity('  ') === null);
+check('capacity: bad values rejected', parseCapacity(-1) === null && parseCapacity(501) === null && parseCapacity(2.5) === null && parseCapacity('abc') === null && parseCapacity(NaN) === null && parseCapacity({}) === null);
 check('valid signature accepted', verifyStripeSignature(body, sign(now), secret, 300, now));
 check('tampered body rejected', !verifyStripeSignature(body + ' ', sign(now), secret, 300, now));
 check('wrong secret rejected', !verifyStripeSignature(body, sign(now, body, 'other'), secret, 300, now));

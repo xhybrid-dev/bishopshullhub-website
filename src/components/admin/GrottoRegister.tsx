@@ -1,16 +1,16 @@
 "use client";
 
-import { useMemo, useState } from 'react';
-import { collection, doc, orderBy, query, updateDoc } from 'firebase/firestore';
-import { Download, Loader2, Printer, Users } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { collection, doc, orderBy, query, setDoc, updateDoc } from 'firebase/firestore';
+import { Download, Loader2, Printer, Settings2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
-import { GROTTO_CAPACITY } from '@/lib/santa-grotto';
+import { useCollection, useDoc, useFirebase, useMemoFirebase } from '@/firebase';
+import { GROTTO_CAPACITY, GROTTO_CAPACITY_MAX, parseCapacity } from '@/lib/santa-grotto';
 import { buildRegisterRows, registerToCsv, registerToPrintHtml, type RegisterBooking } from '@/lib/grotto-register';
 
 const TITLE = 'Santa Grotto 2026 – Saturday 12 December, Bishops Hull Hub';
@@ -26,6 +26,28 @@ export function GrottoRegister({ enabled }: { enabled: boolean }) {
   }, [firestore, enabled]);
   const { data, isLoading, error } = useCollection<RegisterBooking>(bookingsQuery);
 
+  // Capacity admins have saved (falls back to the built-in default).
+  const settingsRef = useMemoFirebase(() => (enabled ? doc(firestore, 'grotto_meta', 'settings') : null), [firestore, enabled]);
+  const { data: settings } = useDoc<{ capacity?: number }>(settingsRef);
+  const capacity = parseCapacity(settings?.capacity) ?? GROTTO_CAPACITY;
+  const [capacityInput, setCapacityInput] = useState('');
+  const [savingCapacity, setSavingCapacity] = useState(false);
+  useEffect(() => { setCapacityInput(String(capacity)); }, [capacity]);
+
+  const newCapacity = parseCapacity(capacityInput);
+  const saveCapacity = async () => {
+    if (newCapacity === null) return;
+    setSavingCapacity(true);
+    try {
+      await setDoc(doc(firestore, 'grotto_meta', 'settings'), { capacity: newCapacity });
+      toast({ title: 'Places updated', description: `The grotto now has ${newCapacity} places. The booking page and home banner use this straight away.` });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Could not save', description: e?.message });
+    } finally {
+      setSavingCapacity(false);
+    }
+  };
+
   const bookings = data ?? [];
   const rows = useMemo(() => buildRegisterRows(bookings), [bookings]);
   const visible = useMemo(() => {
@@ -35,7 +57,7 @@ export function GrottoRegister({ enabled }: { enabled: boolean }) {
   }, [rows, filter]);
 
   const arrived = rows.filter((r) => r.arrived).length;
-  const remaining = Math.max(0, GROTTO_CAPACITY - rows.length);
+  const remaining = Math.max(0, capacity - rows.length);
 
   const toggleArrived = async (bookingId: string, index: number, value: boolean) => {
     const b = bookings.find((x) => x.id === bookingId);
@@ -80,7 +102,7 @@ export function GrottoRegister({ enabled }: { enabled: boolean }) {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Children booked', value: `${rows.length} / ${GROTTO_CAPACITY}` },
+          { label: 'Children booked', value: `${rows.length} / ${capacity}` },
           { label: 'Places left', value: remaining },
           { label: 'Bookings', value: bookings.length },
           { label: 'Arrived', value: `${arrived} / ${rows.length}` },
@@ -93,6 +115,30 @@ export function GrottoRegister({ enabled }: { enabled: boolean }) {
           </Card>
         ))}
       </div>
+
+      <Card className="border-none shadow-sm">
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1">
+            <p className="flex items-center gap-2 text-sm font-semibold text-primary"><Settings2 className="h-4 w-4" /> Places available</p>
+            <p className="text-xs text-muted-foreground">
+              The most children who can book. Applies to the booking page, the home banner and Stripe checkout straight away.
+              Children already booked are never removed, so set it at or above {rows.length} to keep taking bookings.
+            </p>
+          </div>
+          <div className="flex items-end gap-2">
+            <div>
+              <label htmlFor="grotto-capacity" className="text-xs text-muted-foreground">Places</label>
+              <Input id="grotto-capacity" type="number" inputMode="numeric" min={0} max={GROTTO_CAPACITY_MAX} className="w-28"
+                value={capacityInput} onChange={(e) => setCapacityInput(e.target.value)} />
+            </div>
+            <Button onClick={saveCapacity} disabled={savingCapacity || newCapacity === null || newCapacity === capacity}>
+              {savingCapacity ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+            </Button>
+          </div>
+          {newCapacity === null && <p className="text-xs text-destructive sm:basis-full">Enter a whole number from 0 to {GROTTO_CAPACITY_MAX}.</p>}
+          {newCapacity !== null && newCapacity < rows.length && <p className="text-xs text-amber-700 sm:basis-full">That is fewer than the {rows.length} children already booked, so the page will show “Fully booked”.</p>}
+        </CardContent>
+      </Card>
 
       <Card className="border-none shadow-lg">
         <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0">

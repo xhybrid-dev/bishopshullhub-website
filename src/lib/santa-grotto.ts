@@ -40,7 +40,22 @@ export function validateGrottoBooking(b: any): { error: string } | GrottoBooking
 }
 
 /** Total children the grotto can take. Enforced when a checkout is started. */
+/**
+ * Default capacity. Admins can override it from the register in the admin
+ * portal (stored in grotto_meta/settings); this is the fallback when nothing
+ * has been saved.
+ */
 export const GROTTO_CAPACITY = 60;
+/** Highest capacity the admin form accepts (also enforced in firestore.rules). */
+export const GROTTO_CAPACITY_MAX = 500;
+
+/** Parses a capacity typed in the admin form: whole number, 0 to the max. */
+export function parseCapacity(value: unknown): number | null {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && value.trim() === '') return null; // '' would read as 0
+  const n = typeof value === 'number' ? value : Number(value.trim());
+  return Number.isInteger(n) && n >= 0 && n <= GROTTO_CAPACITY_MAX ? n : null;
+}
 /** Stripe's minimum Checkout Session lifetime. Places are held for this long. */
 export const GROTTO_HOLD_MINUTES = 30;
 

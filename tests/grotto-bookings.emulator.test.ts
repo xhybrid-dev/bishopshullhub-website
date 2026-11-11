@@ -3,7 +3,7 @@
  * Run with: npm run test:grotto-emulator
  */
 import { getAdminFirestore } from '../src/lib/firestore-admin';
-import { getAvailability, recordPaidBooking, releaseHold, reservePlaces, SoldOutError } from '../src/lib/grotto-bookings';
+import { getAvailability, getCapacity, recordPaidBooking, releaseHold, reservePlaces, SoldOutError } from '../src/lib/grotto-bookings';
 
 const results: Array<[boolean, string, string]> = [];
 const check = (name: string, cond: unknown, detail = '') => results.push([!!cond, name, detail]);
@@ -50,6 +50,30 @@ const session = (id: string, n: number, hold?: string) => ({
   for (let i = 0; i < 9; i++) await recordPaidBooking(session('fill' + i, 6)); // 3 + 54 = 57 sold
   const over = await recordPaidBooking(session('s2', 6)); // 63 > 60
   check('a late paid booking past capacity is still recorded but flagged', over.created && over.overCapacity);
+
+  // --- admin-set capacity overrides the default ---
+  check('default capacity is 60 when nothing is saved', (await getCapacity()) === 60);
+  const settings = getAdminFirestore().doc('grotto_meta/settings');
+  await settings.set({ capacity: 500 });
+  const a100 = await getAvailability();
+  const sold = (await getAdminFirestore().doc('grotto_meta/stats').get()).data()?.childrenSold as number;
+  const holdDocs = await getAdminFirestore().collection('grotto_holds').get();
+  const held = holdDocs.docs.reduce((n, d) => n + (d.data().children as number), 0);
+  check('raising the capacity opens places', a100.capacity === 500 && a100.remaining > 0, JSON.stringify(a100));
+  check('remaining = capacity - sold - held', a100.remaining === Math.max(0, 500 - sold - held), JSON.stringify({ a100, sold, held }));
+  const grabbed = await reservePlaces(1).catch((e) => e);
+  check('a place can now be reserved', !(grabbed instanceof Error), String(grabbed));
+  await settings.set({ capacity: 10 });
+  check('lowering below sold shows 0 left', (await getAvailability()).remaining === 0);
+  let lowErr: unknown;
+  await reservePlaces(1).catch((e) => (lowErr = e));
+  check('lowered capacity refuses new holds', lowErr instanceof SoldOutError);
+  const flagged = await recordPaidBooking(session('s3', 1));
+  check('over-capacity check uses the saved capacity', flagged.created && flagged.overCapacity && flagged.capacity === 10);
+  await settings.set({ capacity: -5 });
+  check('an invalid saved capacity falls back to the default', (await getCapacity()) === 60);
+  await settings.delete();
+  check('deleting the setting restores the default', (await getCapacity()) === 60);
 
   let failed = 0;
   for (const [ok, name, detail] of results) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : `  ${detail}`}`); }
