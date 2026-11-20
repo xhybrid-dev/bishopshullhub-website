@@ -381,7 +381,7 @@ Bishops Hull Hub Administrative Assistant
 
     if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('re_your_api_key')) {
       const { error } = await resend.emails.send({
-        from: 'Hub Security <bookings@bishopshullhub.co.uk>',
+        from: 'Hub Bookings Team <bookings@bishopshullhub.co.uk>',
         to: securityEmails,
         cc: [ADMIN_EMAIL],
         subject: formattedEmail.subject,
