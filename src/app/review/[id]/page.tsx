@@ -207,7 +207,7 @@ export default function SecurityReviewPage({ params }: { params: Promise<{ id: s
       </Card>
       
       <div className="text-center mt-8 text-xs text-muted-foreground">
-        Bishops Hull Hub Security Management Portal
+        Bishops Hull Booking Management
       </div>
     </div>
   );
