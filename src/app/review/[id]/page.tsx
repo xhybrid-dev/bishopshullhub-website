@@ -111,7 +111,7 @@ export default function SecurityReviewPage({ params }: { params: Promise<{ id: s
         <div className="bg-primary p-8 text-primary-foreground flex items-center justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest opacity-80">
-              <ShieldCheck className="h-4 w-4" /> Security Review Required
+              <ShieldCheck className="h-4 w-4" /> Booking Review
             </div>
             <h1 className="text-2xl md:text-3xl font-headline font-bold">Booking Triage</h1>
           </div>
