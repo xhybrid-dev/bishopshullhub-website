@@ -296,50 +296,67 @@ export async function sendSecurityReviewEmailAction(
       const displayDate = formatUKDate(enquiryData.dateRequired);
       // Enquiry fields are hirer-supplied — escape before embedding in HTML.
       const h = (v: unknown) => escapeHtml(v == null ? '' : String(v));
+      const heading = includeViewingRequest ? 'Booking Viewing Request' : 'Booking Enquiry';
+      const viewingDone = enquiryData.viewingCompletedAt
+        ? formatUKDate(enquiryData.viewingCompletedAt) || String(enquiryData.viewingCompletedAt)
+        : 'Not completed';
       formattedEmail = {
-        subject: `Security Review Required: ${enquiryData.typeOfEvent} on ${displayDate}`,
+        subject: `${heading}: ${enquiryData.typeOfEvent} on ${displayDate}`,
         htmlBody: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
             <div style="background-color: #1a4d46; color: white; padding: 24px; text-align: center;">
-              <h1 style="margin: 0; font-size: 24px;">Security Review Requested</h1>
+              <h1 style="margin: 0; font-size: 24px;">${heading}</h1>
             </div>
             <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
-              <p>A new booking enquiry requires your review for safety and appropriateness.</p>
-              
+              <p>Dear Team,</p>
+              <p>A new event booking enquiry has been submitted and requires your review to contact the hirer for the Bishops Hull Hub.</p>
+
               <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
                 <h2 style="margin-top: 0; font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">Event Details</h2>
                 <p><strong>Type:</strong> ${h(enquiryData.typeOfEvent)}</p>
                 <p><strong>Date:</strong> ${h(displayDate)}</p>
                 <p><strong>Times:</strong> ${h(enquiryData.startTime)} - ${h(enquiryData.endTime)}</p>
                 <p><strong>Attendance:</strong> ${h(enquiryData.estimatedAttendance)} people</p>
+                <p><strong>Requirements:</strong> ${h(enquiryData.additionalRequirements || 'None specified')}</p>
 
                 <h2 style="margin-top: 20px; font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">Hirer Info</h2>
                 <p><strong>Name:</strong> ${h(enquiryData.name)}</p>
                 <p><strong>Contact:</strong> ${h(enquiryData.emailAddress)} / ${h(enquiryData.phoneNumber)}</p>
-                <p><strong>Requirements:</strong> ${h(enquiryData.additionalRequirements || 'None specified')}</p>
+                <p><strong>Viewing Completed At:</strong> ${h(viewingDone)}</p>
               </div>
+
+              <p>Please review all details carefully and contact the hirer using the details below.</p>
 
               <div style="text-align: center; margin-top: 32px;">
                 <a href="${reviewUrl}" style="background-color: #1a4d46; color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Review & Approve Event</a>
               </div>
-              
-              <p style="font-size: 12px; color: #64748b; margin-top: 32px; text-align: center;">
-                Bishops Hull Hub Automated Management System
-              </p>
+
+              <p style="margin-top: 32px;">Thank you,<br/>Bishops Hull Hub Administrative Assistant</p>
             </div>
           </div>
         `,
         textBody: `
-SECURITY REVIEW REQUESTED
--------------------------
+${heading.toUpperCase()}
+------------------------
+Dear Team,
+
+A new event booking enquiry has been submitted and requires your review to contact the hirer for the Bishops Hull Hub.
+
+Event Details
 Event: ${enquiryData.typeOfEvent}
 Date: ${displayDate}
 Time: ${enquiryData.startTime} - ${enquiryData.endTime}
-Hirer: ${enquiryData.name}
 Attendance: ${enquiryData.estimatedAttendance}
-Requirements: ${enquiryData.additionalRequirements}
+Requirements: ${enquiryData.additionalRequirements || 'None specified'}
+Hirer: ${enquiryData.name}
+Viewing Completed At: ${viewingDone}
 
-Review here: ${reviewUrl}
+Please review all details carefully and contact the hirer using the details below.
+
+Review & Approve Event: ${reviewUrl}
+
+Thank you,
+Bishops Hull Hub Administrative Assistant
         `.trim()
       };
     }
@@ -348,7 +365,7 @@ Review here: ${reviewUrl}
     // — the AI flow is told to leave this section to us.
     if (includeViewingRequest) {
       formattedEmail = {
-        subject: `Viewing Required & Security Review: ${enquiryData.typeOfEvent} on ${formatUKDate(enquiryData.dateRequired)}`,
+        subject: `Booking Viewing Request: ${enquiryData.typeOfEvent} on ${formatUKDate(enquiryData.dateRequired)}`,
         htmlBody: `${formattedEmail.htmlBody}${viewingRequestHtml(enquiryData)}`,
         textBody: `${formattedEmail.textBody}\n${viewingRequestText(enquiryData)}`,
       };
@@ -377,7 +394,7 @@ Review here: ${reviewUrl}
         throw new Error(`Resend Error: ${error.message}`);
       }
     } else {
-      console.log('--- SECURITY REVIEW EMAIL SIMULATION ---');
+      console.log('--- BOOKING REVIEW EMAIL SIMULATION ---');
       console.log('To Security Contacts:', securityEmails.join(', '));
       console.log('CC Admin:', ADMIN_EMAIL);
       console.log('Subject:', formattedEmail.subject);

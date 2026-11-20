@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview An AI flow to format a review request email for the security team.
+ * @fileOverview An AI flow to format a booking viewing request email for the hall team.
  */
 
 import { ai } from '@/ai/genkit';
@@ -17,7 +17,7 @@ const FormatReviewEmailInputSchema = z.object({
 });
 
 const FormatReviewEmailOutputSchema = z.object({
-  subject: z.string().describe('A subject line requesting security review.'),
+  subject: z.string().describe("A friendly subject line of the form 'Booking Viewing Request: <event> on <date>'. Must not contain the words 'security' or 'review'."),
   htmlBody: z.string().describe('A professional HTML body with clear review instructions and a big button.'),
   textBody: z.string().describe('A plain text version.'),
 });
@@ -42,28 +42,30 @@ const formatReviewEmailFlow = ai.defineFlow(
       dateRequired: formatUKDate(input.enquiryData?.dateRequired) || input.enquiryData?.dateRequired,
     };
     const { output } = await ai.generate({
-      prompt: `You are an automated administrative assistant for the Bishops Hull Hub.
-      Format a "Security Review Requested" email for our Security Team.
+      prompt: `You are the Bishops Hull Hub Administrative Assistant.
+      Write a warm, accommodating "Booking Viewing Request" email to the hall team. The team
+      forwards it on to the hirer's contact, so it must never sound like a security check,
+      vetting or approval of the hirer. Do not use the words "security" or "vetting".
 
-      The Security Team needs full visibility into the event details to decide if the booking is safe and appropriate for our community hub.
-
-      Please format an email that includes:
-      1. A clear subject line including the event and date.
-      2. A professional HTML body that lists EVERY detail from the enquiry below.
-      3. A prominent "Review & Approve Event" call-to-action button linking to: ${input.reviewUrl}
-      4. A matching plain text version.
+      Use exactly this structure:
+      1. Heading: "Booking Viewing Request"
+      2. "Dear Team,"
+      3. "A new event booking enquiry has been submitted and requires your review to contact the hirer for the Bishops Hull Hub."
+      4. An "Event Details" section listing EVERY detail from the enquiry below, ending with
+         "Viewing Completed At: " followed by the viewingCompletedAt date, or "Not completed" if empty.
+      5. "Please review all details carefully and contact the hirer using the details below."
+      6. A prominent "Review & Approve Event" button linking to: ${input.reviewUrl}
+      7. Sign-off: "Thank you," then "Bishops Hull Hub Administrative Assistant"
+      8. A matching plain text version.
 
       Event Data:
       ${JSON.stringify(displayData, null, 2)}
 
-      Ensure the tone is professional, clear, and emphasizes the importance of their review.
-
       Important: render every date in UK format DD-MM-YYYY (day-month-year). Do not reorder to YYYY-MM-DD or US MM/DD/YYYY style.
 ${input.includeViewingRequest ? `
-      Important: do NOT mention arranging or booking a viewing, and do not add any
-      call to action about contacting the hirer. A separate "Please arrange a viewing"
-      section is appended to your output automatically, and repeating it reads as a
-      duplicate. Cover the security review only.` : ''}`,
+      Important: do NOT add a separate "arrange a viewing" section or list the hirer's contact
+      details as a call to action. A separate "Please arrange a viewing" section is appended to
+      your output automatically, and repeating it reads as a duplicate.` : ''}`,
       output: { schema: FormatReviewEmailOutputSchema },
     });
     return output!;
